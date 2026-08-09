@@ -1,11 +1,11 @@
 // tests/drama-schema.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  createDramaProject, normalizeShot, normalizeFrame,
+  createDramaProject, normalizeShot, normalizeFrame, normalizeClip, normalizeCharacter,
   validateAnalysis, validateDirectedShots, validatePromptedShots, validateReview,
   DEMO_DRAMA_SCRIPT
 } from "../lib/drama/schema.mjs";
@@ -90,6 +90,44 @@ test("store 重启恢复时将孤儿 generating 首帧归一为 failed", () => {
     assert.equal(loaded.shots[0].frame.attempts, 3); // 抽卡次数保留
     assert.equal(loaded.shots[0].frame.seed, 42);
     assert.equal(loaded.shots[0].frame.file, null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("normalizeClip 收敛非法输入", () => {
+  const bare = normalizeClip();
+  assert.deepEqual(bare, { status: "pending", file: null, provider: null, providerTaskId: null, durationSec: 0, attempts: 0, error: null });
+  const clip = normalizeClip({ status: "ready", file: "shot-1-clip-1.mp4", provider: "seedance2", providerTaskId: "t1", durationSec: 99, attempts: 2 });
+  assert.equal(clip.status, "ready");
+  assert.equal(clip.durationSec, 60); // 钳制上限
+  assert.equal(normalizeClip({ status: "hacked" }).status, "pending");
+  assert.equal(normalizeClip({ provider: "unknown" }).provider, null);
+});
+
+test("normalizeShot 携带 clip；normalizeCharacter 携带 voiceId", () => {
+  const shot = normalizeShot({ clip: { status: "ready", file: "a.mp4" } }, 0);
+  assert.equal(shot.clip.status, "ready");
+  assert.equal(normalizeShot({}, 0).clip.status, "pending");
+  const character = normalizeCharacter({ name: "林晚", appearance: "young woman", voiceId: "v1" }, 0);
+  assert.equal(character.voiceId, "v1");
+  assert.equal(normalizeCharacter({ name: "x", appearance: "y" }, 0).voiceId, null);
+});
+
+test("store 重启恢复时将孤儿 generating clip 归一为 failed", () => {
+  const root = mkdtempSync(join(tmpdir(), "drama-store-clip-"));
+  try {
+    const store = createDramaStore(root);
+    const project = createDramaProject({ title: "t", script: "雨夜。" });
+    project.shots = [normalizeShot({}, 0)];
+    project.shots[0].clip = { status: "generating", file: null, provider: "comfyui", providerTaskId: null, durationSec: 0, attempts: 2, error: null };
+    store.save(project);
+    const fresh = createDramaStore(root);
+    const loaded = fresh.get(project.id);
+    assert.equal(loaded.shots[0].clip.status, "failed");
+    assert.equal(loaded.shots[0].clip.error.code, "CLIP_INTERRUPTED");
+    assert.equal(loaded.shots[0].clip.attempts, 2);
+    assert.ok(existsSync(join(root, "drama-projects", project.id, "clips"))); // clips 目录已建
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

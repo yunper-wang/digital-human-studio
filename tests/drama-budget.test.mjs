@@ -12,7 +12,7 @@ test("默认单价可被环境变量覆盖", () => {
   assert.equal(custom.seedancePerShot, 9.5);
 });
 
-test("按镜头类型与台词字数汇总预算", () => {
+test("按镜头类型汇总预算（无独立 TTS 行）", () => {
   const project = createDramaProject({ title: "t", script: "s" });
   project.shots = [
     normalizeShot({ shotType: "dialogue", dialogue: "你好，世界。", durationSec: 5 }, 0),
@@ -25,10 +25,9 @@ test("按镜头类型与台词字数汇总预算", () => {
   assert.equal(byId.frames.subtotal, 0);
   assert.equal(byId.seedance.count, 2);
   assert.equal(byId.seedance.subtotal, 12);
-  assert.equal(byId.h3.count, 8); // 8 秒剧情镜
+  assert.equal(byId.h3.count, 8);
   assert.equal(byId.h3.subtotal, 4);
-  assert.equal(byId.tts.count, 9); // 9 个非空白字符（含标点，与 TTS 计费口径一致）
-  assert.ok(Math.abs(byId.tts.subtotal - 0.018) < 1e-9);
-  assert.ok(Math.abs(budget.totalPaid - 16.018) < 1e-9);
+  assert.equal(byId.tts, undefined); // M3 起无独立配音行：Seedance/H3 原生出声
+  assert.equal(budget.totalPaid, 16);
   assert.equal(budget.estimated, true);
 });
