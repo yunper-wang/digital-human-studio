@@ -21,7 +21,12 @@ const child = spawn(process.execPath, ["server.mjs"], {
     VOICEBOX_DISABLE_AUTO_DETECT: "1",
     SEEDANCE_PYTHON: "",
     TOOL_VAULT_PATH: "",
-    SEEDANCE_RUNNER: ""
+    SEEDANCE_RUNNER: "",
+    DRAMA_LLM_BASE_URL: "",
+    DRAMA_LLM_MODEL: "",
+    DRAMA_LLM_API_KEY: "",
+    DRAMA_LLM_MOCK: "",
+    COMFYUI_URL: ""
   },
   stdio: ["ignore", "pipe", "pipe"]
 });
@@ -109,6 +114,54 @@ try {
   const task = await request(`/api/tasks/${dryRun.taskId}`);
   if (task.status !== "succeeded") throw new Error(`dry run status=${task.status}`);
 
+  // ---------- 短剧工作台：零费用全链路 ----------
+  const dramaScript = "雨夜，林晚抱着纸箱站在便利店门口躲雨。陈默推门出来，把伞塞进她手里转身冲进雨里。林晚低头发现伞柄上贴着一张挂失回执，持卡人姓名写着陈默。她追出去两步，雨幕里已经看不到人影。";
+  const created = await request("/api/drama/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "烟雾短剧", script: dramaScript })
+  });
+  await request(`/api/drama/projects/${created.project.id}/pipeline`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}"
+  });
+  let drama = null;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await wait(250);
+    drama = (await request(`/api/drama/projects/${created.project.id}`)).project;
+    if (["awaiting_gate_a", "review_blocked", "failed"].includes(drama.status)) break;
+  }
+  if (drama.status !== "awaiting_gate_a") throw new Error(`drama pipeline status=${drama.status}`);
+  if (!drama.shots.length || !drama.budget || !drama.review) throw new Error("drama pipeline produced incomplete project");
+  if (drama.shots.some((shot) => shot.fluxPrompt.length < 20)) throw new Error("drama shot missing flux prompt");
+
+  const dramaGateResponse = await fetch(`http://127.0.0.1:${port}/api/drama/projects/${created.project.id}/gate-a`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirmCost: false })
+  });
+  const dramaGate = await dramaGateResponse.json();
+  if (dramaGateResponse.status !== 409 || dramaGate.errorCode !== "COST_CONFIRMATION_REQUIRED") throw new Error("drama cost gate failed");
+
+  const confirmed = await request(`/api/drama/projects/${created.project.id}/gate-a`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirmCost: true })
+  });
+  if (confirmed.project.status !== "frames") throw new Error("drama gate A confirmation did not unlock frames");
+
+  const frameResponse = await fetch(`http://127.0.0.1:${port}/api/drama/projects/${created.project.id}/shots/${drama.shots[0].id}/frame`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}"
+  });
+  const frameResult = await frameResponse.json();
+  if (frameResponse.status !== 503 || frameResult.errorCode !== "COMFYUI_UNAVAILABLE") throw new Error("frame generation should require ComfyUI in clean env");
+
+  const dramaJson = JSON.stringify(drama);
+  if (/\/Users\/|\/home\/|api[_-]?key["']?\s*[:=]\s*["'][^"']+/i.test(dramaJson)) throw new Error("drama api exposed a path or secret value");
+
   console.log(JSON.stringify({
     ok: true,
     service: health.service,
@@ -119,7 +172,9 @@ try {
     customAvatarUpload: customImage.status,
     promptPreview: promptPreview.prompt.length,
     costGate: costGate.errorCode,
-    dryRun: task.status
+    dryRun: task.status,
+    dramaPipeline: drama.status,
+    dramaCostGate: dramaGate.errorCode
   }, null, 2));
 } finally {
   child.kill("SIGTERM");

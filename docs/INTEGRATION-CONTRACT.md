@@ -11,6 +11,8 @@ Digital Human Studio 不内置任何个人 API Key、Token 或私人节点地址
 | 火山语音大模型 | Doubao-Seed-TTS 2.0 | 可选 | `VOLCENGINE_TTS_APP_ID`、`VOLCENGINE_TTS_ACCESS_TOKEN`、`VOLCENGINE_TTS_VOICE_TYPE` | 接入豆包语音合成 2.0 公版音色 |
 | 火山声音复刻 | Doubao-Seed-ICL 2.0 | 可选 | 同上，按控制台开通的资源填写 | 使用用户自行购买的复刻音色 |
 | 本地克隆音色 | Voicebox + Qwen3-TTS | 可选、免费 | 通常自动检测；也可手动填写 `VOICEBOX_URL` | 在本机生成克隆配音 |
+| 短剧编排模型 | OpenAI 兼容端点 | 可选 | `DRAMA_LLM_BASE_URL`、`DRAMA_LLM_MODEL`、`DRAMA_LLM_API_KEY` | 驱动剧本分析/导演分镜/提示词/审核四个阶段；不配置时使用本机演示编排 |
+| 短剧首帧生成 | ComfyUI (Flux) | 可选 | `COMFYUI_URL` | 为每个分镜生成首帧；本机算力，不产生 API 费用 |
 
 `SEEDANCE_MODEL` 是可选的视频模型标识。配置项只写入用户自己的 `.env` 或桌面应用数据目录，不应写进源码、截图、日志或 GitHub。
 
