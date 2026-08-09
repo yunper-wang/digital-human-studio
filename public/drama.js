@@ -132,7 +132,7 @@ function renderProject() {
   $("#shotCountBadge").textContent = project.shots.length || "—";
   renderStages(project);
   renderCharacters(project);
-  renderShots(project);
+  if (!$("#shotList").contains(document.activeElement)) renderShots(project);
   renderBudget(project);
   renderGateB(project);
   $("#resumeBtn").classList.toggle("hidden", project.status !== "failed");
@@ -447,12 +447,14 @@ function schedulePoll(immediate = false) {
   clearTimeout(state.pollTimer);
   const project = state.project;
   if (!project) return;
+  const expectedId = project.id;
   const busy = RUNNING_STATUSES.includes(project.status)
     || project.shots.some((s) => s.frame.status === "generating");
   if (immediate || busy) {
     state.pollTimer = setTimeout(async () => {
       try {
-        const { data } = await api(`/api/drama/projects/${project.id}`);
+        const { data } = await api(`/api/drama/projects/${expectedId}`);
+        if (state.project?.id !== expectedId) return; // 用户已切换项目，丢弃过期响应
         state.project = data.project;
         renderProject();
       } catch { /* 下一次轮询再试 */ }
