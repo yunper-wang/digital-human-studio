@@ -16,7 +16,7 @@
 - **中文注释、中文提交信息** — 格式 `类型: 简短描述`（feat/fix/refactor/docs/test/chore）；代码标识符保持英文。
 - **复用现有模式** — `envelope/sendJson/readJson` 响应约定、`createTask/setTask` 式状态机、`409 COST_CONFIRMATION_REQUIRED` 费用闸门、供应商健康检查形态（`{ configured, connected, state }`）。
 - **不破坏现有功能** — 现有 `/api/tasks`、`/api/avatars` 等行为与 smoke 测试断言（纯净环境无任何 provider connected）必须保持通过。
-- **CI 密钥扫描红线** — 代码与文档中不得出现 `/Users/`、`/home/`、`sk-` 后接 20+ 字符等模式（示例密钥用 `sk-your-key` 这类短占位）。
+- **CI 密钥扫描红线** — 代码与文档中不得出现本机用户目录绝对路径、GitHub Token、`sk-` 后接 20+ 字符等模式（示例密钥用 `sk-your-key` 这类短占位）。
 - **每个任务完成后提交一次 commit。**
 
 ## 文件结构

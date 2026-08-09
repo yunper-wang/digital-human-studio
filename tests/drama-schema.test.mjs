@@ -72,3 +72,25 @@ test("store 持久化项目并可按更新时间列出摘要", () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("store 重启恢复时将孤儿 generating 首帧归一为 failed", () => {
+  const root = mkdtempSync(join(tmpdir(), "drama-store-test-"));
+  try {
+    const store = createDramaStore(root);
+    const project = createDramaProject({ title: "中断恢复", script: "雨夜。" });
+    const shot = normalizeShot({ dialogue: "你好。" }, 0);
+    // 模拟进程猝死前落盘的 generating 状态
+    shot.frame = { status: "generating", file: null, seed: 42, attempts: 3, error: null };
+    project.shots = [shot];
+    store.save(project);
+    const fresh = createDramaStore(root); // 新实例模拟重启后从磁盘加载
+    const loaded = fresh.get(project.id);
+    assert.equal(loaded.shots[0].frame.status, "failed");
+    assert.equal(loaded.shots[0].frame.error.code, "FRAME_INTERRUPTED");
+    assert.equal(loaded.shots[0].frame.attempts, 3); // 抽卡次数保留
+    assert.equal(loaded.shots[0].frame.seed, 42);
+    assert.equal(loaded.shots[0].frame.file, null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
