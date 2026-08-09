@@ -5,6 +5,11 @@ import { extname, join, normalize } from "node:path";
 import { arch, homedir, platform } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createServer } from "node:http";
+import { createDramaStore } from "./lib/drama/store.mjs";
+import { handleDramaApi } from "./lib/drama/routes.mjs";
+import { getDramaLlmConfig, dramaLlmStatus } from "./lib/drama/llm.mjs";
+import { getComfyuiConfig, getComfyuiStatus } from "./lib/drama/comfyui.mjs";
+import { getDramaPricing } from "./lib/drama/budget.mjs";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 const publicRoot = join(projectRoot, "public");
@@ -55,6 +60,11 @@ const seedancePython = process.env.SEEDANCE_PYTHON || "";
 const toolVaultPath = process.env.TOOL_VAULT_PATH || "";
 const seedanceRunner = process.env.SEEDANCE_RUNNER || "";
 const seedanceModel = process.env.SEEDANCE_MODEL || "provider-model";
+// 短剧工作台：必须在 loadEnv 之后读取，否则 .env 中的配置不会生效
+const dramaStore = createDramaStore(dataRoot);
+const dramaLlmConfig = getDramaLlmConfig();
+const comfyuiConfig = getComfyuiConfig();
+const dramaPricing = getDramaPricing();
 
 const contentTypes = {
   ".css": "text/css; charset=utf-8",
@@ -411,7 +421,9 @@ async function providerHealth() {
       state: volcengineTtsAppId && volcengineTtsAccessToken && volcengineTtsVoiceType ? "configured_unverified" : "missing",
       resourceId: volcengineTtsResourceId
     },
-    voicebox: await voiceboxHealth()
+    voicebox: await voiceboxHealth(),
+    dramaLlm: await dramaLlmStatus(dramaLlmConfig),
+    comfyui: await getComfyuiStatus(comfyuiConfig)
   };
 }
 
@@ -496,6 +508,30 @@ function integrationContract(providers) {
         downloadUrl: providers.voicebox?.downloadUrl || voiceboxDownloadUrl(),
         officialUrl: voiceboxOfficialUrl,
         description: "用于连接你自己的本地语音服务，适合私密音色与离线工作流。"
+      },
+      {
+        id: "drama-llm",
+        name: "短剧编排模型",
+        provider: "OpenAI 兼容端点",
+        requirement: "optional",
+        requirementLabel: "可选",
+        configured: Boolean(providers.dramaLlm?.configured),
+        connected: Boolean(providers.dramaLlm?.connected),
+        configKeys: ["DRAMA_LLM_BASE_URL", "DRAMA_LLM_MODEL", "DRAMA_LLM_API_KEY"],
+        optionalConfigKeys: ["DRAMA_LLM_MOCK", "DRAMA_LLM_TIMEOUT_MS"],
+        description: "驱动剧本分析、导演分镜、提示词与审核四个阶段；不配置时使用本机演示编排，不产生费用。"
+      },
+      {
+        id: "comfyui-local",
+        name: "短剧首帧生成",
+        provider: "ComfyUI (Flux)",
+        requirement: "optional",
+        requirementLabel: "可选",
+        configured: Boolean(providers.comfyui?.configured),
+        connected: Boolean(providers.comfyui?.connected),
+        configKeys: ["COMFYUI_URL"],
+        optionalConfigKeys: ["COMFYUI_FLUX_UNET", "COMFYUI_CLIP1", "COMFYUI_CLIP2", "COMFYUI_VAE", "COMFYUI_FLUX_STEPS"],
+        description: "连接你本机的 ComfyUI 服务，用 Flux 为每个分镜生成首帧；本机算力不产生 API 费用。"
       }
     ],
     appApi: [
@@ -504,7 +540,12 @@ function integrationContract(providers) {
       { method: "GET", path: "/api/avatars", purpose: "数字人目录" },
       { method: "GET", path: "/api/voices", purpose: "音色目录" },
       { method: "POST", path: "/api/tasks", purpose: "创建生成或检查任务" },
-      { method: "GET", path: "/api/tasks/{id}", purpose: "查询长任务状态" }
+      { method: "GET", path: "/api/tasks/{id}", purpose: "查询长任务状态" },
+      { method: "POST", path: "/api/drama/projects", purpose: "创建短剧项目" },
+      { method: "GET", path: "/api/drama/projects/{id}", purpose: "查询短剧项目与流水线状态" },
+      { method: "POST", path: "/api/drama/projects/{id}/pipeline", purpose: "发起或续跑编排流水线" },
+      { method: "POST", path: "/api/drama/projects/{id}/gate-a", purpose: "确认短剧预算闸门" },
+      { method: "POST", path: "/api/drama/projects/{id}/shots/{shotId}/frame", purpose: "生成或换抽分镜首帧" }
     ]
   };
 }
@@ -1091,6 +1132,19 @@ async function handleApi(request, response, url) {
       }));
     }
     return sendJson(response, 422, envelope(false, null, { requestId, errorCode: "TASK_TYPE_INVALID", message: "不支持的任务类型" }));
+  }
+
+  if (url.pathname.startsWith("/api/drama/")) {
+    return handleDramaApi(request, response, url, {
+      sendJson,
+      envelope,
+      readJson,
+      allowRequest,
+      store: dramaStore,
+      llmDeps: { config: dramaLlmConfig },
+      comfyConfig: comfyuiConfig,
+      pricing: dramaPricing
+    });
   }
 
   return false;
