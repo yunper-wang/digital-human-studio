@@ -10,6 +10,7 @@ import { handleDramaApi } from "./lib/drama/routes.mjs";
 import { getDramaLlmConfig, dramaLlmStatus } from "./lib/drama/llm.mjs";
 import { getComfyuiConfig, getComfyuiStatus } from "./lib/drama/comfyui.mjs";
 import { getDramaPricing } from "./lib/drama/budget.mjs";
+import { buildSeedancePrompt, downloadReference, resolveSeedanceAvatar, resolveSeedanceVoice, runSeedanceGeneration } from "./lib/seedance.mjs";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 const publicRoot = join(projectRoot, "public");
@@ -563,187 +564,70 @@ function trustedUploadPath(value) {
   return existsSync(path) ? path : "";
 }
 
-async function downloadReference(url, runDir, stem, kind) {
-  if (!/^https:\/\//i.test(String(url || ""))) throw new Error(`${kind === "image" ? "人物图片" : "音色样本"}不是可访问的 HTTPS 地址`);
-  const response = await fetch(url, { signal: AbortSignal.timeout(60_000) });
-  if (!response.ok) throw new Error(`${kind === "image" ? "人物图片" : "音色样本"}下载失败 (${response.status})`);
-  const contentType = String(response.headers.get("content-type") || "").toLowerCase();
-  const allowed = kind === "image"
-    ? [["image/jpeg", "jpg"], ["image/png", "png"], ["image/webp", "webp"]]
-    : [["audio/mpeg", "mp3"], ["audio/wav", "wav"], ["audio/x-wav", "wav"], ["audio/mp4", "m4a"], ["audio/aac", "aac"]];
-  const match = allowed.find(([mime]) => contentType.startsWith(mime));
-  if (!match) throw new Error(`${kind === "image" ? "人物图片" : "音色样本"}格式不受支持`);
-  const bytes = Buffer.from(await response.arrayBuffer());
-  const maxBytes = kind === "image" ? 12 * 1024 * 1024 : 25 * 1024 * 1024;
-  if (!bytes.length || bytes.length > maxBytes) throw new Error(`${kind === "image" ? "人物图片" : "音色样本"}为空或超过大小限制`);
-  const path = join(runDir, `${stem}.${match[1]}`);
-  writeFileSync(path, bytes);
-  return path;
-}
-
-async function resolveSeedanceAvatar(payload, runDir) {
-  const avatar = avatarById(payload.avatarId);
-  if (!avatar) throw Object.assign(new Error("找不到所选人物图片"), { code: "AVATAR_NOT_FOUND" });
-  if (avatar.source === "demo") {
-    throw Object.assign(new Error("演示形象仅用于界面预览，请添加你自己的人物图片"), { code: "DEMO_AVATAR_NOT_GENERATABLE" });
-  }
-  const localPath = trustedUploadPath(avatar.image);
-  if (localPath) return { avatar, path: localPath };
-  const remoteUrl = avatar.remoteUrl || avatar.image;
-  return { avatar, path: await downloadReference(remoteUrl, runDir, "character_reference", "image") };
-}
-
-async function resolveSeedanceVoice(payload, runDir) {
-  const voice = [...loadLocalVoices(), ...loadCustomVoices()].find((item) => item.id === payload.voiceId) || null;
-  if (voice?.previewPath && existsSync(voice.previewPath)) return { voice, path: voice.previewPath };
-  const previewUrl = voice?.previewUrl || String(payload.voicePreviewUrl || "");
-  if (!previewUrl) throw Object.assign(new Error("所选音色没有可用的参考音频"), { code: "VOICE_REFERENCE_MISSING" });
-  return { voice: voice || { id: payload.voiceId, name: payload.voiceName || "所选音色" }, path: await downloadReference(previewUrl, runDir, "voice_reference", "audio") };
-}
-
-function buildSeedancePrompt(payload, avatar, voice) {
-  const language = payload.language === "en" ? "英语" : payload.language === "es" ? "西班牙语" : "普通话中文";
-  return [
-    "生成一条真实自然的单人口播视频。",
-    `人物身份锁定：参考图片中的人物是唯一出镜者，严格保持其面部、发型、肤色、服装和年龄感一致，不换人，不美化成另一张脸。人物名称：${avatar.name}。`,
-    `声音锁定：严格参考音频中“${voice.name}”的音色、音高、口音、语速、节奏、情绪温度与停顿方式；只复刻声音特征，不复述参考音频原文。`,
-    `口播语言：${language}。人物正面看镜头，准确自然地说出以下台词，嘴型与发音同步：`,
-    `“${String(payload.script || "").trim()}”`,
-    "镜头以稳定中近景为主，保持直视镜头，自然眨眼和轻微头部、肩部动作，表情与语义一致。",
-    payload.settings?.motion === false ? "动作幅度克制，身体基本保持稳定。" : "动作自然克制，不夸张，不突然大幅移动。",
-    "背景稳定，无其他人物，无画面文字、乱码、水印或额外旁白。"
-  ].join("\n");
-}
+const seedanceAccessors = {
+  findAvatar: avatarById,
+  trustedUploadPath,
+  findVoice: (id) => [...loadLocalVoices(), ...loadCustomVoices()].find((item) => item.id === id)
+};
+const seedanceConfig = {
+  python: seedancePython,
+  toolVault: toolVaultPath,
+  runner: seedanceRunner,
+  model: seedanceModel,
+  projectRoot,
+  accessors: seedanceAccessors
+};
 
 async function generateSeedanceVideo(taskId, payload) {
   const runDir = join(seedanceRunRoot, taskId);
-  mkdirSync(runDir, { recursive: true });
-  let child;
-  let providerTaskId = "";
-  let stderrBuffer = "";
-  let lineBuffer = "";
-  let pollCount = 0;
-  let finished = false;
-  let timeout;
-  const finish = (patch) => {
-    if (finished) return;
-    finished = true;
-    if (timeout) clearTimeout(timeout);
-    setTask(taskId, patch);
-  };
-
+  setTask(taskId, { status: "running", progress: 5, startedAt: new Date().toISOString(), provider: "seedance2" });
   try {
-    setTask(taskId, { status: "running", progress: 5, startedAt: new Date().toISOString(), provider: "seedance2" });
-    const [{ avatar, path: avatarPath }, { voice, path: voicePath }] = await Promise.all([
-      resolveSeedanceAvatar(payload, runDir),
-      resolveSeedanceVoice(payload, runDir)
-    ]);
-    const generationPrompt = String(payload.generationPrompt || "").trim() || buildSeedancePrompt(payload, avatar, voice);
-    if (generationPrompt.length < 20 || generationPrompt.length > 10_000) {
-      throw Object.assign(new Error("Seedance 生成提示词需为 20–10000 个字符"), { code: "GENERATION_PROMPT_INVALID" });
-    }
-    const promptPath = join(runDir, "prompt.txt");
-    writeFileSync(promptPath, `${generationPrompt}\n`, "utf8");
-    setTask(taskId, { progress: 16 });
-
-    const ratio = payload.ratio === "landscape" ? "16:9" : payload.ratio === "square" ? "1:1" : "9:16";
-    const resolution = ["480p", "720p"].includes(payload.resolution) ? payload.resolution : "480p";
-    const args = [
-      toolVaultPath, "run", "seedance2", "--",
-      seedancePython, seedanceRunner, "submit",
-      "--prompt-file", promptPath,
-      "--title", String(payload.title || "数字人口播").slice(0, 80),
-      "--out-dir", runDir,
-      "--image", avatarPath,
-      "--audio-reference", voicePath,
-      "--model", seedanceModel,
-      "--resolution", resolution,
-      "--ratio", ratio,
-      "--duration", "15",
-      "--poll-interval", "10",
-      "--max-polls", "180",
-      "--confirm-submit-authorization",
-      "--verify"
-    ];
-    child = spawn(seedancePython, args, { cwd: projectRoot, stdio: ["ignore", "pipe", "pipe"] });
-  } catch (error) {
-    return finish({
-      status: "failed", progress: 100, finishedAt: new Date().toISOString(),
-      error: { code: error.code || "SEEDANCE_PREFLIGHT_FAILED", message: error.message, retryable: false }
-    });
-  }
-
-  const handleLine = (line) => {
-    let event;
-    try { event = JSON.parse(line); } catch { return; }
-    if (event.phase === "submitted_once") {
-      providerTaskId = event.task_id || providerTaskId;
-      setTask(taskId, { progress: 35, providerTaskId });
-    } else if (event.phase === "poll") {
-      pollCount += 1;
-      setTask(taskId, { progress: Math.min(92, 42 + pollCount * 2), providerTaskId, providerStatus: event.status || "running" });
-    }
-  };
-
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => {
-    lineBuffer += chunk;
-    const lines = lineBuffer.split("\n");
-    lineBuffer = lines.pop() || "";
-    lines.forEach(handleLine);
-  });
-  child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk) => { stderrBuffer = `${stderrBuffer}${chunk}`.slice(-5000); });
-  child.on("error", (error) => finish({
-    status: "failed", progress: 100, finishedAt: new Date().toISOString(),
-    error: { code: "SEEDANCE_PROCESS_FAILED", message: error.message, retryable: true, ...(providerTaskId ? { providerTaskId } : {}) }
-  }));
-  child.on("close", (code) => {
-    if (finished) return;
-    if (lineBuffer) handleLine(lineBuffer);
-    const reportPath = join(runDir, "final_report.json");
-    let report = null;
-    try { report = JSON.parse(readFileSync(reportPath, "utf8")); } catch {}
-    providerTaskId = report?.task_id || providerTaskId;
-    if (code === 0 && report?.status === "succeeded" && report.video_path && existsSync(report.video_path)) {
-      const fileName = `${taskId}.mp4`;
-      copyFileSync(report.video_path, join(outputRoot, fileName));
-      return finish({
-        status: "succeeded", progress: 100, finishedAt: new Date().toISOString(),
-        result: {
-          provider: "seedance2",
-          providerTaskId,
-          providerStatus: "succeeded",
-          videoUrl: `/outputs/${fileName}`,
-          balanceBefore: report.balance_before?.wallet_balance ?? null,
-          balanceAfter: report.balance_after?.wallet_balance ?? null,
-          deductedPoints: report.deducted_points ?? null
+    const result = await runSeedanceGeneration({
+      config: seedanceConfig,
+      payload,
+      runDir,
+      durationSec: 15, // 口播页固定 15 秒，与历史行为一致
+      onEvent: (event) => {
+        if (event.phase === "prepared") setTask(taskId, { progress: 16 });
+        else if (event.phase === "submitted") setTask(taskId, { progress: 35, providerTaskId: event.providerTaskId });
+        else if (event.phase === "poll") {
+          setTask(taskId, {
+            progress: Math.min(92, 42 + event.pollCount * 2),
+            providerTaskId: event.providerTaskId,
+            providerStatus: event.status
+          });
         }
-      });
-    }
-    let message = report?.status && report.status !== "succeeded" ? `Seedance 任务状态：${report.status}` : "Seedance 生成失败";
-    const stderrLine = stderrBuffer.trim().split("\n").filter(Boolean).at(-1);
-    if (stderrLine) {
-      try { message = JSON.parse(stderrLine).error || message; }
-      catch { message = stderrLine.slice(0, 800); }
-    }
-    finish({
-      status: "failed", progress: 100, finishedAt: new Date().toISOString(),
-      error: { code: "SEEDANCE_GENERATION_FAILED", message, retryable: false, ...(providerTaskId ? { providerTaskId } : {}) }
-    });
-  });
-  timeout = setTimeout(() => {
-    child.kill("SIGTERM");
-    finish({
-      status: "failed", progress: 100, finishedAt: new Date().toISOString(),
-      error: {
-        code: "SEEDANCE_WAIT_TIMEOUT",
-        message: "Seedance 已等待 30 分钟，本地停止轮询且不会自动重提；可用任务 ID 继续查询",
-        retryable: false,
-        ...(providerTaskId ? { providerTaskId } : {})
       }
     });
-  }, 30 * 60_000);
+    const fileName = `${taskId}.mp4`;
+    copyFileSync(result.videoPath, join(outputRoot, fileName));
+    setTask(taskId, {
+      status: "succeeded",
+      progress: 100,
+      finishedAt: new Date().toISOString(),
+      result: {
+        provider: "seedance2",
+        providerTaskId: result.providerTaskId,
+        providerStatus: "succeeded",
+        videoUrl: `/outputs/${fileName}`,
+        balanceBefore: result.report.balance_before?.wallet_balance ?? null,
+        balanceAfter: result.report.balance_after?.wallet_balance ?? null,
+        deductedPoints: result.report.deducted_points ?? null
+      }
+    });
+  } catch (error) {
+    setTask(taskId, {
+      status: "failed",
+      progress: 100,
+      finishedAt: new Date().toISOString(),
+      error: {
+        code: error.code || "SEEDANCE_GENERATION_FAILED",
+        message: error.message,
+        retryable: Boolean(error.retryable),
+        ...(error.providerTaskId ? { providerTaskId: error.providerTaskId } : {})
+      }
+    });
+  }
 }
 
 function persistTasks() {
@@ -1143,7 +1027,9 @@ async function handleApi(request, response, url) {
       store: dramaStore,
       llmDeps: { config: dramaLlmConfig },
       comfyConfig: comfyuiConfig,
-      pricing: dramaPricing
+      pricing: dramaPricing,
+      seedanceConfig,
+      seedanceStatus: getSeedanceStatus
     });
   }
 

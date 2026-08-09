@@ -13,7 +13,7 @@
   "scripts": {
     "start": "node server.mjs",
     "app": "electron .",
-    "check": "node --check server.mjs && node --check desktop.mjs && node --check public/app.js && node --check lib/drama/schema.mjs && node --check lib/drama/store.mjs && node --check lib/drama/llm.mjs && node --check lib/drama/agents.mjs && node --check lib/drama/budget.mjs && node --check lib/drama/pipeline.mjs && node --check lib/drama/comfyui.mjs && node --check lib/drama/routes.mjs && node --check public/drama.js",
+    "check": "node --check server.mjs && node --check desktop.mjs && node --check public/app.js && node --check lib/drama/schema.mjs && node --check lib/drama/store.mjs && node --check lib/drama/llm.mjs && node --check lib/drama/agents.mjs && node --check lib/drama/budget.mjs && node --check lib/drama/pipeline.mjs && node --check lib/drama/comfyui.mjs && node --check lib/drama/routes.mjs && node --check public/drama.js && node --check lib/seedance.mjs && node --check tests/fixtures/fake-seedance-runner.mjs",
     "test:unit": "node --test tests/*.test.mjs",
     "test": "npm run check && npm run test:unit && npm run smoke",
     "smoke": "node scripts/smoke.mjs",
