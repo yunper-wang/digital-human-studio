@@ -13,8 +13,9 @@
   "scripts": {
     "start": "node server.mjs",
     "app": "electron .",
-    "check": "node --check server.mjs && node --check desktop.mjs && node --check public/app.js",
-    "test": "npm run check && npm run smoke",
+    "check": "node --check server.mjs && node --check desktop.mjs && node --check public/app.js && node --check lib/drama/schema.mjs && node --check lib/drama/store.mjs",
+    "test:unit": "node --test tests/*.test.mjs",
+    "test": "npm run check && npm run test:unit && npm run smoke",
     "smoke": "node scripts/smoke.mjs",
     "build:mac": "electron-packager . 'Digital Human Studio' --platform=darwin --arch=arm64 --out=release --overwrite --prune=true --asar --app-bundle-id=studio.zaorenju.desktop --app-category-type=public.app-category.video --app-version=0.4.3 --icon=assets/icon.icns --ignore='^/(release|docs/screenshots|data/outputs|data/uploads|data/seedance-runs|config/avatars\\.json|config/local-voices\\.json|\\.env)$' && codesign --force --deep --sign - 'release/Digital Human Studio-darwin-arm64/Digital Human Studio.app'",
     "dist:mac": "npm run build:mac && ditto -c -k --sequesterRsrc --keepParent 'release/Digital Human Studio-darwin-arm64/Digital Human Studio.app' 'release/Digital-Human-Studio-0.4.3-macOS-arm64.zip'"
