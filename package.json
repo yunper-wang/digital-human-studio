@@ -13,7 +13,7 @@
   "scripts": {
     "start": "node server.mjs",
     "app": "electron .",
-    "check": "node --check server.mjs && node --check desktop.mjs && node --check public/app.js && node --check lib/drama/schema.mjs && node --check lib/drama/store.mjs",
+    "check": "node --check server.mjs && node --check desktop.mjs && node --check public/app.js && node --check lib/drama/schema.mjs && node --check lib/drama/store.mjs && node --check lib/drama/llm.mjs",
     "test:unit": "node --test tests/*.test.mjs",
     "test": "npm run check && npm run test:unit && npm run smoke",
     "smoke": "node scripts/smoke.mjs",
