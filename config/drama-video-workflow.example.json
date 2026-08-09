@@ -1,0 +1,24 @@
+{
+  "_说明": [
+    "这是短剧剧情镜的视频工作流模板。复制本文件为 config/drama-video-workflow.json 后按下列步骤配置：",
+    "1. 在本机 ComfyUI 中调好你的图生视频工作流（推荐 MiniMax H3 原生/社区节点，也可是 Wan 等本机模型）；",
+    "2. 用 ComfyUI 的「导出 API 格式」得到 workflow JSON，覆盖本文件除 _ 前缀键以外的内容；",
+    "3. 把需要程序注入的输入值替换为下方占位符（整值占位符会按类型写入，例如 SEED 会写成数字）；",
+    "4. 首帧图片由程序自动上传到 ComfyUI 并把文件名填入 {{IMAGE}}，你的工作流需要一个 LoadImage 类节点承接。",
+    "也可以用环境变量 DRAMA_VIDEO_WORKFLOW 指向任意路径的模板文件。"
+  ],
+  "_占位符": {
+    "{{PROMPT}}": "运动提示词（分镜 motionPrompt，回退 action）",
+    "{{IMAGE}}": "首帧图片在 ComfyUI 侧的文件名（程序自动上传）",
+    "{{SEED}}": "随机种子（number）",
+    "{{WIDTH}}": "画面宽（number，按项目画幅）",
+    "{{HEIGHT}}": "画面高（number，按项目画幅）",
+    "{{FPS}}": "帧率（number，默认 24）",
+    "{{FRAMES}}": "总帧数（number，durationSec × FPS）"
+  },
+  "_最小骨架示例": {
+    "1": { "class_type": "LoadImage", "inputs": { "image": "{{IMAGE}}" } },
+    "2": { "class_type": "你的I2V节点类名（如 MiniMax H3 图生视频节点）", "inputs": { "prompt": "{{PROMPT}}", "image": ["1", 0], "seed": "{{SEED}}", "num_frames": "{{FRAMES}}" } },
+    "3": { "class_type": "你的视频保存节点类名", "inputs": { "video": ["2", 0], "filename_prefix": "drama" } }
+  }
+}
