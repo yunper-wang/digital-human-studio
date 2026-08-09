@@ -1181,6 +1181,17 @@ function serveStatic(response, pathname) {
     createReadStream(uploadPath).pipe(response);
     return true;
   }
+  const dramaFileMatch = pathname.match(/^\/drama-files\/(drama-[a-f0-9-]+)\/([a-z0-9-]+\.(png|jpg|webp))$/i);
+  if (dramaFileMatch) {
+    const filePath = join(dramaStore.dir(dramaFileMatch[1]), "frames", dramaFileMatch[2]);
+    if (!existsSync(filePath) || !statSync(filePath).isFile()) return false;
+    response.writeHead(200, {
+      "Cache-Control": "private, max-age=3600",
+      "Content-Type": contentTypes[extname(filePath)] || "application/octet-stream"
+    });
+    createReadStream(filePath).pipe(response);
+    return true;
+  }
   const requestedPath = pathname === "/" ? "/index.html" : decodeURIComponent(pathname);
   const safePath = normalize(requestedPath).replace(/^(\.\.(\/|\\|$))+/, "");
   const filePath = join(publicRoot, safePath);
