@@ -1029,7 +1029,9 @@ async function handleApi(request, response, url) {
       comfyConfig: comfyuiConfig,
       pricing: dramaPricing,
       seedanceConfig,
-      seedanceStatus: getSeedanceStatus
+      seedanceStatus: getSeedanceStatus,
+      findAvatar: avatarById,
+      findVoice: seedanceAccessors.findVoice
     });
   }
 
