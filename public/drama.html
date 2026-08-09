@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>短剧工作台 · Digital Human Studio</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="drama-body">
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">剧</span>
+        <div><small>Digital Human Studio</small><b>短剧工作台</b></div>
+      </div>
+      <nav class="steps" aria-label="短剧流程">
+        <button class="step" data-anchor="scriptCard"><i>1</i><span><b>剧本</b><small>输入与解析</small></span></button>
+        <button class="step" data-anchor="shotsPanel"><i>2</i><span><b>分镜表</b><small>导演决策结果</small></span><em id="shotCountBadge">—</em></button>
+        <button class="step" data-anchor="budgetPanel"><i>3</i><span><b>预算与首帧</b><small>两道确认闸门</small></span></button>
+      </nav>
+      <div class="side-links">
+        <a class="side-link" href="/"><span>⌂</span>返回口播工作台</a>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="providers">
+          <button class="provider" id="llmStatus"><span class="provider-logo">LL</span><b>编排模型</b><i></i><small>检查中</small></button>
+          <button class="provider" id="comfyStatus"><span class="provider-logo">C</span><b>ComfyUI</b><i></i><small>检查中</small></button>
+        </div>
+        <div class="top-actions">
+          <select id="projectSelect" class="project-select"></select>
+          <button class="ghost" id="newProjectBtn">新建项目</button>
+          <button class="ghost" id="demoBtn">演示剧本</button>
+          <button class="primary" id="runPipelineBtn">开始解析</button>
+        </div>
+      </header>
+
+      <div class="banner hidden" id="mockBanner">演示编排模式：未配置 DRAMA_LLM_*，当前由本机确定性 mock 驱动，不产生任何费用。</div>
+      <div class="banner error hidden" id="errorBanner"></div>
+
+      <div class="drama-grid">
+        <section class="editor-column">
+          <section class="script-card" id="scriptCard">
+            <div class="card-head"><span class="eyebrow">SCRIPT</span><h2>剧本</h2></div>
+            <input id="dramaTitle" class="title-input" maxlength="80" placeholder="短剧标题" />
+            <textarea id="dramaScript" spellcheck="false" placeholder="粘贴或输入短剧剧本（50–20000 字）…"></textarea>
+            <div class="card-foot"><span id="dramaCharCount">0 字</span><span id="projectStatus">未开始</span></div>
+          </section>
+
+          <section class="pipeline-card">
+            <div class="card-head"><span class="eyebrow">PIPELINE</span><h2>编排流水线</h2></div>
+            <ol class="stage-list" id="stageList">
+              <li data-stage="analyze"><b>剧本分析</b><small>角色 / 场景 / 梗概</small><em></em></li>
+              <li data-stage="direct"><b>导演分镜</b><small>镜头类型与运镜</small><em></em></li>
+              <li data-stage="prompt"><b>提示词</b><small>Flux 首帧提示词</small><em></em></li>
+              <li data-stage="review"><b>文本审核</b><small>安全与结构</small><em></em></li>
+            </ol>
+            <button class="ghost hidden" id="resumeBtn">从失败阶段续跑</button>
+          </section>
+
+          <section class="character-card">
+            <div class="card-head"><span class="eyebrow">CAST</span><h2>角色资产卡</h2></div>
+            <div id="characterList" class="character-list"><p class="muted">解析后生成</p></div>
+          </section>
+        </section>
+
+        <section class="shots-column" id="shotsPanel">
+          <div class="section-head"><div><span class="eyebrow">STORYBOARD</span><h2>分镜表</h2></div>
+            <button class="mini-btn hidden" id="genAllFramesBtn">生成全部首帧</button>
+          </div>
+          <div id="shotList" class="shot-list"><p class="muted">运行流水线后展示分镜</p></div>
+        </section>
+
+        <aside class="settings-column" id="budgetPanel">
+          <section class="budget-card">
+            <div class="card-head"><span class="eyebrow">BUDGET</span><h2>预算单（预估）</h2></div>
+            <div id="budgetLines" class="budget-lines"><p class="muted">流水线完成后生成</p></div>
+            <div class="budget-total"><span>预计付费合计</span><b id="budgetTotal">—</b></div>
+            <button class="primary hidden" id="gateABtn">确认预算，进入首帧生成</button>
+            <p class="fine-print">首帧使用本机算力（¥0）。视频与配音单价为预估值，可在 .env 中校准，实际以供应商扣费为准。</p>
+          </section>
+          <section class="gate-card">
+            <div class="card-head"><span class="eyebrow">GATE B</span><h2>首帧确认</h2></div>
+            <div class="gate-progress"><div class="progress"><i id="gateBProgress"></i></div><span id="gateBText">0 / 0</span></div>
+            <div class="banner success hidden" id="doneBanner">首帧全部确认，MVP 流程完成。视频生成与合成属于后续里程碑。</div>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal" id="gateAModal" aria-hidden="true">
+    <div class="modal-card">
+      <h3>确认短剧预算</h3>
+      <div id="modalBudgetLines" class="budget-lines"></div>
+      <div class="budget-total"><span>预计付费合计</span><b id="modalBudgetTotal"></b></div>
+      <p class="fine-print">确认后才会开始任何进一步操作；首帧生成本身不产生费用。台词或时长变更会使确认失效，需要重新确认。</p>
+      <div class="modal-actions">
+        <button class="ghost" id="gateACancel">再改改</button>
+        <button class="primary" id="gateAConfirm">确认预算</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastWrap" class="toast-wrap"></div>
+  <script src="drama.js"></script>
+</body>
+</html>

@@ -78,3 +78,126 @@ main { min-width: 0; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } }
 @media (max-width: 1320px) { .workspace { grid-template-columns: minmax(420px,1fr) 350px 260px; }.providers { display: none; }.voice-list { grid-template-columns: repeat(2,1fr); }.voice-card:nth-child(n+5) { display: none; }.voice-tuning { grid-template-columns: repeat(3,1fr); }.preview-btn { grid-column: 1/-1; }.avatar-list { grid-template-columns: repeat(3,1fr); }.avatar-card { aspect-ratio: 1; }.video-frame.portrait { width: 260px; } }
+
+/* ---------- 短剧工作台 ---------- */
+.drama-body .drama-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr minmax(260px, 320px);
+  gap: 20px;
+  padding: 20px;
+  align-items: start;
+}
+.drama-body .script-card textarea {
+  min-height: 260px;
+  width: 100%;
+  resize: vertical;
+}
+.drama-body .banner {
+  margin: 12px 20px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(216, 255, 62, 0.08);
+  border: 1px solid rgba(216, 255, 62, 0.25);
+  font-size: 13px;
+}
+.drama-body .banner.error {
+  background: rgba(255, 92, 92, 0.08);
+  border-color: rgba(255, 92, 92, 0.3);
+}
+.drama-body .banner.success {
+  background: rgba(80, 220, 140, 0.1);
+  border-color: rgba(80, 220, 140, 0.3);
+}
+.drama-body .hidden { display: none !important; }
+.drama-body .muted { opacity: 0.55; font-size: 13px; }
+.drama-body .project-select { max-width: 220px; }
+.drama-body .stage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.drama-body .stage-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  opacity: 0.6;
+}
+.drama-body .stage-list li.active { opacity: 1; border-color: rgba(216, 255, 62, 0.5); }
+.drama-body .stage-list li.done { opacity: 0.9; }
+.drama-body .stage-list li em { margin-left: auto; font-style: normal; font-size: 12px; }
+.drama-body .character-list { display: flex; flex-direction: column; gap: 10px; }
+.drama-body .character-item { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; }
+.drama-body .character-item small { opacity: 0.6; word-break: break-all; }
+.drama-body .shot-list { display: flex; flex-direction: column; gap: 16px; }
+.drama-body .shot-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.drama-body .shot-head { display: flex; align-items: center; gap: 10px; }
+.drama-body .shot-head small { margin-left: auto; opacity: 0.6; }
+.drama-body .badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.drama-body .badge.dialogue { border-color: rgba(108, 165, 255, 0.6); color: #9cc2ff; }
+.drama-body .badge.cinematic { border-color: rgba(216, 255, 62, 0.5); color: #d8ff3e; }
+.drama-body .badge.confirmed { border-color: rgba(80, 220, 140, 0.6); color: #50dc8c; }
+.drama-body .shot-card textarea { width: 100%; resize: vertical; font-size: 13px; }
+.drama-body .shot-dialogue { min-height: 44px; }
+.drama-body .shot-action { min-height: 44px; }
+.drama-body .shot-prompt { min-height: 64px; font-family: ui-monospace, monospace; opacity: 0.85; }
+.drama-body .shot-frame {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.drama-body .shot-frame img { max-width: 100%; max-height: 320px; display: block; }
+.drama-body .shot-actions { display: flex; align-items: center; gap: 10px; }
+.drama-body .error-text { color: #ff8a8a; }
+.drama-body .budget-lines { display: flex; flex-direction: column; gap: 8px; }
+.drama-body .budget-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.drama-body .budget-row span { opacity: 0.75; }
+.drama-body .budget-total {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 15px;
+}
+.drama-body .fine-print { font-size: 12px; opacity: 0.5; margin-top: 10px; }
+.drama-body .gate-progress { display: flex; align-items: center; gap: 10px; }
+.drama-body .gate-progress .progress { flex: 1; height: 6px; border-radius: 999px; background: rgba(255,255,255,0.1); overflow: hidden; }
+.drama-body .gate-progress .progress i { display: block; height: 100%; background: #d8ff3e; width: 0; transition: width 0.3s; }
+.drama-body .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); z-index: 50; }
+.drama-body .modal.open { display: flex; }
+.drama-body .modal-card {
+  width: min(480px, 92vw);
+  background: #17181c;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 22px;
+}
+.drama-body .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.drama-body .provider[data-mode="on"] i { background: #50dc8c; }
+.drama-body .provider[data-mode="demo"] i { background: #ffd23e; }
+.drama-body .provider[data-mode="off"] i { background: #666; }
+@media (max-width: 1100px) {
+  .drama-body .drama-grid { grid-template-columns: 1fr; }
+}
