@@ -201,3 +201,6 @@ main { min-width: 0; }
 @media (max-width: 1100px) {
   .drama-body .drama-grid { grid-template-columns: 1fr; }
 }
+.drama-body .app { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
+.drama-body .main { min-width: 0; }
+.drama-body .side-links { margin-top: auto; }

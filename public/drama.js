@@ -503,4 +503,4 @@ $$("[data-anchor]").forEach((button) => {
 });
 
 loadHealth();
-loadProjects();
+loadProjects().catch(() => toast("项目列表加载失败", "请检查本地服务", "error"));
