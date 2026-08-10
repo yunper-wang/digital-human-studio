@@ -132,3 +132,16 @@ test("store 重启恢复时将孤儿 generating clip 归一为 failed", () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("normalizeShot 收敛 audioMode 与 continuity", () => {
+  const def = normalizeShot({}, 0);
+  assert.equal(def.audioMode, "voice");       // 默认配音
+  assert.equal(def.continuity, "");
+  const custom = normalizeShot({ audioMode: "none", continuity: "与镜 2 同场景" }, 0);
+  assert.equal(custom.audioMode, "none");
+  assert.equal(custom.continuity, "与镜 2 同场景");
+  const bad = normalizeShot({ audioMode: "loud" }, 0);
+  assert.equal(bad.audioMode, "voice");        // 非法值回退默认
+  const long = normalizeShot({ continuity: "x".repeat(200) }, 0);
+  assert.equal(long.continuity.length, 120);   // 截断到 120
+});
