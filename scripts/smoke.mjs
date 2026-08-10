@@ -156,6 +156,20 @@ try {
   });
   if (bindBad.status !== 422 || (await bindBad.json()).errorCode !== "VOICE_NOT_FOUND") throw new Error("character binding validation failed");
 
+  // ---------- M5：合成守卫（干净环境无系统 FFmpeg 时） ----------
+  const ffProbe = await request(`/api/drama/projects/${created.project.id}/compose/ffmpeg`);
+  if (typeof ffProbe.available !== "boolean") throw new Error("compose/ffmpeg 未返回 available 布尔值");
+  const composeTry = await fetch(`http://127.0.0.1:${port}/api/drama/projects/${created.project.id}/compose`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}"
+  });
+  const composeBody = await composeTry.json();
+  // 无 FFmpeg → 503 FFMPEG_UNAVAILABLE；有 FFmpeg 但视频未确认 → 409 CLIPS_NOT_READY；二者必居其一
+  if (composeBody.ok) throw new Error("compose 在守卫场景不应成功");
+  if (!["FFMPEG_UNAVAILABLE", "CLIPS_NOT_READY"].includes(composeBody.errorCode)) {
+    throw new Error(`compose 守卫异常：${composeBody.errorCode}`);
+  }
+  if (JSON.stringify(ffProbe).match(/\/Users\/|\/home\//)) throw new Error("compose/ffmpeg 暴露了本机路径");
+
   console.log(JSON.stringify({
     ok: true,
     service: health.service,
@@ -167,7 +181,8 @@ try {
     dramaPipeline: drama.status,
     dramaCostGate: dramaGate.errorCode,
     dramaShotEditGuard: `${patchedShot.audioMode}/${patchedShot.continuity}`,
-    dramaVideoGate: videoNoBindingBody.errorCode
+    dramaVideoGate: videoNoBindingBody.errorCode,
+    composeGuard: composeBody.errorCode
   }, null, 2));
 } finally {
   child.kill("SIGTERM");

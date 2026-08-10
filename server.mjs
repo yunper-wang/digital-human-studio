@@ -10,6 +10,7 @@ import { handleDramaApi } from "./lib/drama/routes.mjs";
 import { getDramaLlmConfig, dramaLlmStatus } from "./lib/drama/llm.mjs";
 import { getComfyuiConfig, getComfyuiStatus, loadVideoWorkflowTemplate } from "./lib/drama/comfyui.mjs";
 import { getDramaPricing } from "./lib/drama/budget.mjs";
+import { detectFfmpeg } from "./lib/drama/ffmpeg.mjs";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 const publicRoot = join(projectRoot, "public");
@@ -69,6 +70,8 @@ const contentTypes = {
   ".mp3": "audio/mpeg",
   ".mp4": "video/mp4",
   ".wav": "audio/wav",
+  ".m4a": "audio/mp4",
+  ".srt": "application/x-subrip; charset=utf-8",
   ".svg": "image/svg+xml",
   ".webp": "image/webp"
 };
@@ -725,7 +728,10 @@ async function handleApi(request, response, url) {
       seedanceConfig,
       seedanceStatus: getSeedanceStatus,
       findAvatar: avatarById,
-      findVoice: seedanceAccessors.findVoice
+      findVoice: seedanceAccessors.findVoice,
+      detectFfmpeg: () => detectFfmpeg({ env: process.env }),
+      ffmpegPath: detectFfmpeg({ env: process.env }).path || "ffmpeg",
+      audioDeps: { voiceboxUrl: discoverVoiceboxServiceUrl(), elevenKey, fetchImpl: fetch }
     });
   }
 
@@ -754,11 +760,12 @@ function serveStatic(response, pathname) {
     createReadStream(uploadPath).pipe(response);
     return true;
   }
-  const dramaFileMatch = pathname.match(/^\/drama-files\/(drama-[a-f0-9-]+)\/([a-z0-9-]+\.(png|jpg|webp|mp4|webm))$/i);
+  const dramaFileMatch = pathname.match(/^\/drama-files\/(drama-[a-f0-9-]+)\/(?:(frames|clips|audio|compose|bgm)\/)?([a-z0-9-]+\.(png|jpg|webp|mp4|webm|mp3|wav|m4a|srt))$/i);
   if (dramaFileMatch) {
-    // 首帧在 frames/，视频成片在 clips/：按扩展名选择子目录
-    const subdir = /\.(mp4|webm)$/i.test(dramaFileMatch[2]) ? "clips" : "frames";
-    const filePath = join(dramaStore.dir(dramaFileMatch[1]), subdir, dramaFileMatch[2]);
+    const [, id, sub, file] = dramaFileMatch;
+    // 兼容旧两段式（无子目录）：按扩展名推断 frames/clips；M5 三段式用显式子目录（audio/compose/bgm）
+    const subdir = sub || (/\.(mp4|webm)$/i.test(file) ? "clips" : "frames");
+    const filePath = join(dramaStore.dir(id), subdir, file);
     if (!existsSync(filePath) || !statSync(filePath).isFile()) return false;
     response.writeHead(200, {
       "Cache-Control": "private, max-age=3600",
