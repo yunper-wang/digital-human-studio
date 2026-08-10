@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  createDramaProject, normalizeShot, normalizeFrame, normalizeClip, normalizeCharacter,
+  createDramaProject, normalizeProject, normalizeShot, normalizeFrame, normalizeClip, normalizeCharacter,
   validateAnalysis, validateDirectedShots, validatePromptedShots, validateReview,
   DEMO_DRAMA_SCRIPT
 } from "../lib/drama/schema.mjs";
@@ -97,7 +97,7 @@ test("store 重启恢复时将孤儿 generating 首帧归一为 failed", () => {
 
 test("normalizeClip 收敛非法输入", () => {
   const bare = normalizeClip();
-  assert.deepEqual(bare, { status: "pending", file: null, provider: null, providerTaskId: null, durationSec: 0, attempts: 0, error: null });
+  assert.deepEqual(bare, { status: "pending", file: null, provider: null, providerTaskId: null, durationSec: 0, attempts: 0, error: null, audio: { status: "none", file: null, provider: null, error: null } });
   const clip = normalizeClip({ status: "ready", file: "shot-1-clip-1.mp4", provider: "seedance2", providerTaskId: "t1", durationSec: 99, attempts: 2 });
   assert.equal(clip.status, "ready");
   assert.equal(clip.durationSec, 60); // 钳制上限
@@ -144,4 +144,28 @@ test("normalizeShot 收敛 audioMode 与 continuity", () => {
   assert.equal(bad.audioMode, "voice");        // 非法值回退默认
   const long = normalizeShot({ continuity: "x".repeat(200) }, 0);
   assert.equal(long.continuity.length, 120);   // 截断到 120
+});
+
+test("clip 增加 audio 生命周期，project 增加 bgm/compose", () => {
+  const clip = normalizeClip({ status: "confirmed", audio: { status: "ready", file: "shot-1.mp3", provider: "voicebox" } });
+  assert.equal(clip.audio.status, "ready");
+  assert.equal(clip.audio.provider, "voicebox");
+  // 默认 audio.status 为 none
+  assert.equal(normalizeClip({}).audio.status, "none");
+  // 非法 audio.status 回退 none
+  assert.equal(normalizeClip({ audio: { status: "bogus" } }).audio.status, "none");
+
+  const p = normalizeProject({
+    id: "drama-x", title: "t", script: "s", ratio: "portrait",
+    bgm: { file: "bgm/song.mp3", name: "song", volume: 0.4 },
+    compose: { status: "succeeded", file: "final.mp4", srtFile: "film.srt" }
+  });
+  assert.equal(p.bgm.name, "song");
+  assert.equal(p.bgm.volume, 0.4);
+  assert.equal(p.compose.status, "succeeded");
+  assert.equal(p.compose.srtFile, "film.srt");
+  // 默认：bgm 为 null、compose.status 为 idle
+  const d = normalizeProject({ id: "drama-y", title: "t", script: "s", ratio: "portrait" });
+  assert.equal(d.bgm, null);
+  assert.equal(d.compose.status, "idle");
 });
