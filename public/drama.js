@@ -499,7 +499,7 @@ function renderGateB(project) {
   $("#clipProgress").style.width = clipTotal ? `${(clipConfirmed / clipTotal) * 100}%` : "0%";
   $("#clipText").textContent = `${clipConfirmed} / ${clipTotal}`;
   if (project.status === "clips_ready") {
-    $("#doneBanner").textContent = "全部视频已确认，M3 流程完成。时间线合成导出属于 M4。";
+    $("#doneBanner").textContent = "全部视频已确认。时间线合成导出属于后续里程碑（M5）。";
   } else if (project.status === "frames_confirmed") {
     // 换绑/重抽首帧可从 clips_ready 回到 frames_confirmed，需恢复对应文案
     $("#doneBanner").textContent = "首帧全部确认。现在可以逐镜生成视频（口播镜需先绑定角色形象与音色）。";

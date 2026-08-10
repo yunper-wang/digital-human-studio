@@ -109,6 +109,18 @@ try {
   });
   if (confirmed.project.status !== "frames") throw new Error("drama gate A confirmation did not unlock frames");
 
+  // M4 新字段守卫：audioMode/continuity 编辑持久化，且不使闸门 A 确认失效（仅台词/时长变更才失效）
+  const patchedProject = await request(`/api/drama/projects/${created.project.id}/shots/${drama.shots[0].id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ audioMode: "none", continuity: "回归" })
+  });
+  const patchedShot = patchedProject.project.shots.find((shot) => shot.id === drama.shots[0].id);
+  if (patchedShot.audioMode !== "none" || patchedShot.continuity !== "回归") throw new Error("shot audioMode/continuity edit not persisted");
+  if (!patchedProject.project.gateAConfirmedAt || patchedProject.project.gateAConfirmedAt !== confirmed.project.gateAConfirmedAt) {
+    throw new Error("audioMode/continuity edit must not invalidate gate A confirmation");
+  }
+
   const frameResponse = await fetch(`http://127.0.0.1:${port}/api/drama/projects/${created.project.id}/shots/${drama.shots[0].id}/frame`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -154,6 +166,7 @@ try {
     customAvatarUpload: customImage.status,
     dramaPipeline: drama.status,
     dramaCostGate: dramaGate.errorCode,
+    dramaShotEditGuard: `${patchedShot.audioMode}/${patchedShot.continuity}`,
     dramaVideoGate: videoNoBindingBody.errorCode
   }, null, 2));
 } finally {
