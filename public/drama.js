@@ -6,7 +6,9 @@ const state = {
   projects: [],
   avatars: [],
   voices: [],
-  pollTimer: null
+  pollTimer: null,
+  view: "script",          // script | assets | story | generate
+  selectedShotId: null
 };
 
 const RUNNING_STATUSES = ["analyzing", "directing", "prompting", "reviewing"];
@@ -17,6 +19,14 @@ const STATUS_LABEL = {
   failed: "流水线失败", frames: "首帧生成中", awaiting_gate_b: "待确认首帧", frames_confirmed: "首帧已确认",
   videos: "视频生成中", clips_ready: "全部视频已确认",
 };
+
+const VIEWS = ["script", "assets", "story", "generate"];
+const STEPPER = [
+  { key: "script", no: "01", label: "剧本" },
+  { key: "assets", no: "03", label: "视觉资产" },
+  { key: "story", no: "04", label: "分镜" },
+  { key: "generate", no: "05", label: "镜头生成" }
+];
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -72,7 +82,7 @@ async function loadHealth() {
 
 function setProvider(node, mode, label) {
   node.dataset.mode = mode;
-  node.querySelector("small").textContent = label;
+  node.title = label;
 }
 
 // ---------- 项目加载 ----------
@@ -122,6 +132,53 @@ async function createProject() {
   return data.project;
 }
 
+// ---------- 视图切换与步骤条 ----------
+
+function setView(name) {
+  if (!VIEWS.includes(name)) return;
+  state.view = name;
+  $$(".vz-ic[data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === name));
+  $("#viewScript").classList.toggle("hidden", name !== "script");
+  $("#viewAssets").classList.toggle("hidden", name !== "assets");
+  $("#viewStory").classList.toggle("hidden", name !== "story");
+  $("#viewGenerate").classList.toggle("hidden", name !== "generate");
+  renderStepper();
+}
+
+function currentStageKey(project) {
+  if (!project || !project.analysis) return "script";
+  if (["analyzing", "directing", "prompting", "reviewing"].includes(project.status)) return "script";
+  if (!project.gateAConfirmedAt) return "assets";
+  if (!project.shots.every((s) => s.frame.status === "confirmed")) return "story";
+  return "generate";
+}
+
+function renderStepper() {
+  const project = state.project;
+  const active = currentStageKey(project);
+  const box = $("#stepper");
+  box.innerHTML = "";
+  for (const s of STEPPER) {
+    const li = document.createElement("li");
+    li.className = "vz-step" + (s.key === active ? " on" : "");
+    li.innerHTML = `<span class="no">${s.no}</span>${s.label}`;
+    li.addEventListener("click", () => setView(s.key));
+    box.append(li);
+  }
+}
+
+function renderProjHead(project) {
+  const box = $("#projHead");
+  const shotCount = project ? project.shots.length : 0;
+  box.innerHTML = "";
+  const left = document.createElement("div");
+  left.innerHTML = `<h1>${project ? project.title : "新建短剧"}</h1><p>完善剧本与角色后，再逐镜头生成视频。</p>`;
+  const tags = document.createElement("div");
+  tags.className = "tags";
+  tags.innerHTML = `<span>${project ? (project.ratio === "portrait" ? "9:16" : project.ratio) : "9:16"}</span><span>${shotCount} 个镜头</span>`;
+  box.append(left, tags);
+}
+
 // ---------- 渲染 ----------
 
 function renderProject() {
@@ -132,10 +189,11 @@ function renderProject() {
   if (document.activeElement !== $("#dramaScript")) $("#dramaScript").value = project.script;
   $("#dramaCharCount").textContent = `${project.script.replace(/\s/g, "").length} 字`;
   $("#projectStatus").textContent = STATUS_LABEL[project.status] || project.status;
-  $("#shotCountBadge").textContent = project.shots.length || "—";
+  renderProjHead(project);
+  renderStepper();
   renderStages(project);
   renderCharacters(project);
-  if (!$("#shotList").contains(document.activeElement)) renderShots(project);
+  renderStory(project);   // Task 5 先实现 strip+preview；Task 6 加 inspector
   renderBudget(project);
   renderGateB(project);
   $("#resumeBtn").classList.toggle("hidden", project.status !== "failed");
@@ -238,146 +296,10 @@ function frameUrl(project, shot) {
   return shot.frame.file ? `/drama-files/${project.id}/${shot.frame.file}` : null;
 }
 
-function renderShots(project) {
-  const box = $("#shotList");
-  box.innerHTML = "";
-  if (!project.shots.length) {
-    box.innerHTML = '<p class="muted">运行流水线后展示分镜</p>';
-    return;
-  }
-  for (const shot of project.shots) {
-    box.append(buildShotCard(project, shot));
-  }
-}
-
-function buildShotCard(project, shot) {
-  const card = document.createElement("article");
-  card.className = "shot-card";
-  card.dataset.shotId = shot.id;
-
-  const head = document.createElement("div");
-  head.className = "shot-head";
-  const title = document.createElement("b");
-  title.textContent = `镜 ${shot.index} · ${shot.sceneName}`;
-  const badge = document.createElement("span");
-  badge.className = `badge ${shot.shotType}`;
-  badge.textContent = shot.shotType === "dialogue" ? "口播镜" : "剧情镜";
-  const meta = document.createElement("small");
-  meta.textContent = `${shot.camera} · ${shot.durationSec}s · ${shot.emotion}`;
-  head.append(title, badge, meta);
-
-  const dialogue = document.createElement("textarea");
-  dialogue.className = "shot-dialogue";
-  dialogue.value = shot.dialogue;
-  dialogue.placeholder = "台词（口播镜必填）";
-  dialogue.disabled = !isEditable(project);
-  dialogue.addEventListener("change", () => saveShot(project, shot.id, { dialogue: dialogue.value }));
-
-  const action = document.createElement("textarea");
-  action.className = "shot-action";
-  action.value = shot.action;
-  action.placeholder = "画面描述";
-  action.disabled = !isEditable(project);
-  action.addEventListener("change", () => saveShot(project, shot.id, { action: action.value }));
-
-  const prompt = document.createElement("textarea");
-  prompt.className = "shot-prompt";
-  prompt.value = shot.fluxPrompt;
-  prompt.placeholder = "Flux 首帧提示词";
-  prompt.disabled = !isEditable(project);
-  prompt.addEventListener("change", () => saveShot(project, shot.id, { fluxPrompt: prompt.value }));
-
-  const frameBox = document.createElement("div");
-  frameBox.className = "shot-frame";
-  const url = frameUrl(project, shot);
-  if (url) {
-    const img = document.createElement("img");
-    img.src = url;
-    img.alt = `镜 ${shot.index} 首帧`;
-    frameBox.append(img);
-  } else {
-    const empty = document.createElement("span");
-    empty.className = "muted";
-    empty.textContent = frameStatusText(shot);
-    frameBox.append(empty);
-  }
-
-  const actions = document.createElement("div");
-  actions.className = "shot-actions";
-  const genBtn = document.createElement("button");
-  genBtn.className = "mini-btn";
-  genBtn.textContent = shot.frame.status === "ready" || shot.frame.status === "confirmed" ? "换抽" : "生成首帧";
-  genBtn.disabled = !project.gateAConfirmedAt || shot.frame.status === "generating";
-  genBtn.addEventListener("click", () => generateFrame(project, shot.id));
-  actions.append(genBtn);
-  if (shot.frame.status === "ready") {
-    const confirmBtn = document.createElement("button");
-    confirmBtn.className = "mini-btn primary-mini";
-    confirmBtn.textContent = "确认首帧";
-    confirmBtn.addEventListener("click", () => confirmFrame(project, shot.id));
-    actions.append(confirmBtn);
-  }
-  if (shot.frame.status === "confirmed") {
-    const tag = document.createElement("span");
-    tag.className = "badge confirmed";
-    tag.textContent = "已确认";
-    actions.append(tag);
-  }
-  if (shot.frame.status === "failed") {
-    const error = document.createElement("small");
-    error.className = "error-text";
-    error.textContent = shot.frame.error?.message || "生成失败";
-    actions.append(error);
-  }
-
-  const clipBox = document.createElement("div");
-  clipBox.className = "shot-clip";
-  const clip = shot.clip || { status: "pending" };
-  if (clip.file) {
-    const video = document.createElement("video");
-    video.controls = true;
-    video.preload = "metadata";
-    video.src = `/drama-files/${project.id}/${clip.file}`;
-    clipBox.append(video);
-  }
-  const clipActions = document.createElement("div");
-  clipActions.className = "shot-actions";
-  const videoBtn = document.createElement("button");
-  videoBtn.className = "mini-btn";
-  videoBtn.textContent = ["ready", "confirmed"].includes(clip.status) ? "重新生成视频" : "生成视频";
-  videoBtn.disabled = !canGenerateVideo(project, shot) || clip.status === "generating";
-  videoBtn.title = videoBlockReason(project, shot);
-  videoBtn.addEventListener("click", () => generateVideo(project, shot));
-  clipActions.append(videoBtn);
-  if (clip.status === "generating") {
-    const busy = document.createElement("small");
-    busy.className = "muted";
-    busy.textContent = "视频生成中…";
-    clipActions.append(busy);
-  }
-  if (clip.status === "ready") {
-    const confirmBtn = document.createElement("button");
-    confirmBtn.className = "mini-btn primary-mini";
-    confirmBtn.textContent = "确认视频";
-    confirmBtn.addEventListener("click", () => confirmVideo(project, shot.id));
-    clipActions.append(confirmBtn);
-  }
-  if (clip.status === "confirmed") {
-    const tag = document.createElement("span");
-    tag.className = "badge confirmed";
-    tag.textContent = "视频已确认";
-    clipActions.append(tag);
-  }
-  if (clip.status === "failed") {
-    const error = document.createElement("small");
-    error.className = "error-text";
-    error.textContent = clip.error?.message || "视频生成失败";
-    clipActions.append(error);
-  }
-  clipBox.append(clipActions);
-
-  card.append(head, dialogue, action, prompt, frameBox, actions, clipBox);
-  return card;
+function renderStory(project) {
+  $("#stripMeta").textContent = `${project.shots.length} 镜`;
+  $("#strip").innerHTML = '<p class="muted">分镜条见下一任务</p>';
+  $("#inspector").innerHTML = '<p class="muted">检查器见下一任务</p>';
 }
 
 function isEditable(project) {
@@ -621,6 +543,7 @@ function schedulePoll(immediate = false) {
 
 // ---------- 事件绑定 ----------
 
+$$(".vz-ic[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 $("#runPipelineBtn").addEventListener("click", runPipeline);
 $("#resumeBtn").addEventListener("click", runPipeline);
 $("#gateABtn").addEventListener("click", openGateAModal);
@@ -632,19 +555,22 @@ $("#projectSelect").addEventListener("change", (event) => {
 });
 $("#newProjectBtn").addEventListener("click", () => {
   state.project = null;
+  state.selectedShotId = null;
   localStorage.removeItem("dramaCurrentProjectId");
   $("#projectSelect").value = "";
   $("#dramaTitle").value = "";
   $("#dramaScript").value = "";
   $("#dramaCharCount").textContent = "0 字";
   $("#projectStatus").textContent = "未开始";
-  $("#shotList").innerHTML = '<p class="muted">运行流水线后展示分镜</p>';
   $("#characterList").innerHTML = '<p class="muted">解析后生成</p>';
   $("#budgetLines").innerHTML = '<p class="muted">流水线完成后生成</p>';
   $("#budgetTotal").textContent = "—";
-  $("#shotCountBadge").textContent = "—";
   $("#clipProgress").style.width = "0%";
   $("#clipText").textContent = "0 / 0";
+  renderProjHead(null);
+  renderStepper();
+  renderStory({ shots: [] });
+  setView("script");
   showError(null);
 });
 $("#demoBtn").addEventListener("click", async () => {
@@ -656,11 +582,6 @@ $("#demoBtn").addEventListener("click", async () => {
 $("#dramaScript").addEventListener("input", () => {
   $("#dramaCharCount").textContent = `${$("#dramaScript").value.replace(/\s/g, "").length} 字`;
 });
-$$("[data-anchor]").forEach((button) => {
-  button.addEventListener("click", () => {
-    document.getElementById(button.dataset.anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-});
 
 async function loadCatalogs() {
   try {
@@ -670,6 +591,8 @@ async function loadCatalogs() {
   } catch { /* 目录加载失败不阻塞页面 */ }
 }
 
+renderProjHead(null);
+renderStepper();
 loadHealth();
 loadCatalogs();
 loadProjects().catch(() => toast("项目列表加载失败", "请检查本地服务", "error"));
