@@ -169,13 +169,15 @@ function renderStepper() {
 
 function renderProjHead(project) {
   const box = $("#projHead");
-  const shotCount = project ? project.shots.length : 0;
   box.innerHTML = "";
   const left = document.createElement("div");
-  left.innerHTML = `<h1>${project ? project.title : "新建短剧"}</h1><p>完善剧本与角色后，再逐镜头生成视频。</p>`;
-  const tags = document.createElement("div");
-  tags.className = "tags";
-  tags.innerHTML = `<span>${project ? (project.ratio === "portrait" ? "9:16" : project.ratio) : "9:16"}</span><span>${shotCount} 个镜头</span>`;
+  const h1 = document.createElement("h1"); h1.textContent = project ? project.title : "新建短剧";
+  const p = document.createElement("p"); p.textContent = "完善剧本与角色后，再逐镜头生成视频。";
+  left.append(h1, p);
+  const tags = document.createElement("div"); tags.className = "tags";
+  const ratio = document.createElement("span"); ratio.textContent = project ? (project.ratio === "portrait" ? "9:16" : project.ratio) : "9:16";
+  const count = document.createElement("span"); count.textContent = `${project ? project.shots.length : 0} 个镜头`;
+  tags.append(ratio, count);
   box.append(left, tags);
 }
 
@@ -193,7 +195,7 @@ function renderProject() {
   renderStepper();
   renderStages(project);
   renderCharacters(project);
-  renderStory(project);   // Task 5 先实现 strip+preview；Task 6 加 inspector
+  renderStory(project);
   renderBudget(project);
   renderGateB(project);
   $("#resumeBtn").classList.toggle("hidden", project.status !== "failed");
@@ -296,10 +298,112 @@ function frameUrl(project, shot) {
   return shot.frame.file ? `/drama-files/${project.id}/${shot.frame.file}` : null;
 }
 
+function selectShot(shotId) {
+  state.selectedShotId = shotId;
+  renderStory(state.project);
+}
+
+function currentShot(project) {
+  if (!project || !project.shots.length) return null;
+  return project.shots.find((s) => s.id === state.selectedShotId) || project.shots[0];
+}
+
 function renderStory(project) {
-  $("#stripMeta").textContent = `${project.shots.length} 镜`;
-  $("#strip").innerHTML = '<p class="muted">分镜条见下一任务</p>';
-  $("#inspector").innerHTML = '<p class="muted">检查器见下一任务</p>';
+  renderStrip(project);
+  const shot = currentShot(project);
+  renderPreview(project, shot);
+  renderInspector(project, shot);
+}
+
+function renderStrip(project) {
+  const box = $("#strip");
+  box.innerHTML = "";
+  $("#stripMeta").textContent = `${project.shots.length} 镜 · 点击选镜`;
+  if (!project.shots.length) { box.innerHTML = '<p class="muted">运行流水线后展示分镜</p>'; return; }
+  for (const shot of project.shots) {
+    const th = document.createElement("button");
+    th.className = "vz-th" + (shot.id === (currentShot(project)?.id) ? " sel" : "") + (shot.frame.status === "failed" ? " failed" : "");
+    const url = frameUrl(project, shot);
+    if (url) { const img = document.createElement("img"); img.src = url; img.alt = `镜${shot.index}`; th.append(img); }
+    const num = document.createElement("span"); num.className = "num"; num.textContent = shot.index; th.append(num);
+    const bdg = document.createElement("span"); bdg.className = `bdg ${shot.shotType}`; bdg.textContent = shot.shotType === "dialogue" ? "词" : "画"; th.append(bdg);
+    const dur = document.createElement("span"); dur.className = "dur"; dur.textContent = `${shot.durationSec}s`; th.append(dur);
+    if (shot.frame.status === "confirmed") { const ok = document.createElement("span"); ok.className = "ok"; ok.textContent = "✓"; th.append(ok); }
+    th.addEventListener("click", () => selectShot(shot.id));
+    box.append(th);
+  }
+}
+
+function renderPreview(project, shot) {
+  const stage = $("#preview");
+  const meta = $("#previewMeta");
+  if (!shot) { stage.innerHTML = '<div class="frm"><span class="empty">运行流水线后展示分镜</span></div>'; meta.textContent = "未选镜"; return; }
+  meta.textContent = `镜 ${shot.index} / ${project.shots.length} · ${shot.shotType === "dialogue" ? "口播镜" : "剧情镜"} · ${shot.durationSec}s`;
+  stage.innerHTML = "";
+  const tag = document.createElement("span"); tag.className = "stagetag"; tag.textContent = `镜 ${shot.index}`; stage.append(tag);
+  const frm = document.createElement("div"); frm.className = "frm";
+  const clip = shot.clip || { status: "pending" };
+  if (clip.file) {
+    const v = document.createElement("video"); v.controls = true; v.preload = "metadata"; v.src = `/drama-files/${project.id}/${clip.file}`; frm.append(v);
+  } else if (frameUrl(project, shot)) {
+    const img = document.createElement("img"); img.src = frameUrl(project, shot); img.alt = `镜${shot.index}首帧`; frm.append(img);
+  } else {
+    const s = document.createElement("span"); s.className = "empty"; s.textContent = frameStatusText(shot) || "待生成首帧"; frm.append(s);
+  }
+  stage.append(frm);
+}
+
+function renderInspector(project, shot) {
+  const box = $("#inspector");
+  box.innerHTML = "";
+  if (!shot) { box.innerHTML = '<p class="muted">选中一个分镜以编辑</p>'; return; }
+  const tabs = document.createElement("div"); tabs.className = "vz-tabs";
+  const tabShot = document.createElement("button"); tabShot.className = "on"; tabShot.textContent = "分镜";
+  tabs.append(tabShot); box.append(tabs);
+
+  const editable = isEditable(project);
+  const mkField = (label, node) => { const f = document.createElement("div"); f.className = "vz-field"; const l = document.createElement("label"); l.textContent = label; f.append(l, node); return f; };
+
+  const dialogue = document.createElement("textarea"); dialogue.value = shot.dialogue; dialogue.placeholder = "台词（口播镜必填）"; dialogue.disabled = !editable;
+  dialogue.addEventListener("change", () => saveShot(project, shot.id, { dialogue: dialogue.value }));
+  box.append(mkField(`台词（镜 ${shot.index}）`, dialogue));
+
+  const prompt = document.createElement("textarea"); prompt.value = shot.fluxPrompt; prompt.disabled = !editable; prompt.style.minHeight = "70px";
+  prompt.addEventListener("change", () => saveShot(project, shot.id, { fluxPrompt: prompt.value }));
+  box.append(mkField("Flux 首帧提示词", prompt));
+
+  const cam = document.createElement("select"); ["close-up","medium","wide","over-shoulder","low-angle"].forEach((c) => { const o = document.createElement("option"); o.value = c; o.textContent = c; cam.append(o); });
+  cam.value = shot.camera; cam.disabled = !editable;
+  cam.addEventListener("change", () => saveShot(project, shot.id, { camera: cam.value }));
+  const dur = document.createElement("input"); dur.type = "number"; dur.min = "2"; dur.max = "15"; dur.value = shot.durationSec; dur.disabled = !editable;
+  dur.addEventListener("change", () => saveShot(project, shot.id, { durationSec: Number(dur.value) }));
+  const row = document.createElement("div"); row.className = "vz-rowline"; row.append(cam, dur);
+  box.append(mkField("运镜 · 时长(s)", row));
+
+  const seg = document.createElement("div"); seg.className = "vz-seg";
+  [["voice","配音"],["none","静音"]].forEach(([val,label]) => { const b = document.createElement("button"); b.textContent = label; b.className = shot.audioMode === val ? "on" : ""; b.disabled = !editable; b.addEventListener("click", () => saveShot(project, shot.id, { audioMode: val })); seg.append(b); });
+  box.append(mkField("音频模式", seg));
+
+  const cont = document.createElement("input"); cont.type = "text"; cont.value = shot.continuity || ""; cont.placeholder = "如：与镜 2 同场景"; cont.maxLength = 120; cont.disabled = !editable;
+  cont.addEventListener("change", () => saveShot(project, shot.id, { continuity: cont.value }));
+  box.append(mkField("连续性 / 衔接", cont));
+
+  const frameRow = document.createElement("div"); frameRow.className = "vz-rowline";
+  if (frameUrl(project, shot)) { const t = document.createElement("img"); t.className = "vz-minithumb"; t.src = frameUrl(project, shot); frameRow.append(t); }
+  const genBtn = document.createElement("button"); genBtn.className = "vz-btn"; genBtn.textContent = ["ready","confirmed"].includes(shot.frame.status) ? "↻ 换抽" : "生成首帧";
+  genBtn.disabled = !project.gateAConfirmedAt || shot.frame.status === "generating";
+  genBtn.addEventListener("click", () => generateFrame(project, shot.id)); frameRow.append(genBtn);
+  if (shot.frame.status === "ready") { const c = document.createElement("button"); c.className = "vz-btn vz-btn-primary"; c.textContent = "确认首帧"; c.addEventListener("click", () => confirmFrame(project, shot.id)); frameRow.append(c); }
+  box.append(mkField("首帧", frameRow));
+
+  const reason = videoBlockReason(project, shot);
+  const clip = shot.clip || { status: "pending" };
+  const vBtn = document.createElement("button"); vBtn.className = "vz-apply";
+  vBtn.textContent = ["ready","confirmed"].includes(clip.status) ? "重新生成视频" : "生成视频";
+  vBtn.disabled = !canGenerateVideo(project, shot) || clip.status === "generating"; vBtn.title = reason;
+  vBtn.addEventListener("click", () => generateVideo(project, shot)); box.append(vBtn);
+  if (clip.status === "ready") { const c = document.createElement("button"); c.className = "vz-btn vz-btn-primary"; c.style.marginTop = "8px"; c.style.width = "100%"; c.textContent = "确认视频"; c.addEventListener("click", () => confirmVideo(project, shot.id)); box.append(c); }
+  if (reason) { const h = document.createElement("div"); h.className = "vz-hint"; h.textContent = reason; box.append(h); }
 }
 
 function isEditable(project) {
