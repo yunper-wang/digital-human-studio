@@ -4,6 +4,8 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const state = {
   project: null,
   projects: [],
+  avatars: [],
+  voices: [],
   pollTimer: null
 };
 
@@ -12,7 +14,8 @@ const STAGE_ORDER = ["analyze", "direct", "prompt", "review"];
 const STATUS_LABEL = {
   draft: "草稿", analyzing: "剧本分析中", directing: "导演分镜中", prompting: "提示词生成中",
   reviewing: "审核中", awaiting_gate_a: "待确认预算", review_blocked: "审核未通过",
-  failed: "流水线失败", frames: "首帧生成中", awaiting_gate_b: "待确认首帧", frames_confirmed: "首帧已确认"
+  failed: "流水线失败", frames: "首帧生成中", awaiting_gate_b: "待确认首帧", frames_confirmed: "首帧已确认",
+  videos: "视频生成中", clips_ready: "全部视频已确认",
 };
 
 async function api(path, options = {}) {
@@ -174,8 +177,60 @@ function renderCharacters(project) {
     personality.textContent = character.personality || "—";
     const appearance = document.createElement("small");
     appearance.textContent = character.appearance;
-    card.append(name, personality, appearance);
+
+    const avatarRow = document.createElement("label");
+    avatarRow.className = "bind-row";
+    avatarRow.append(document.createTextNode("形象"));
+    const avatarSelect = document.createElement("select");
+    const emptyAvatar = document.createElement("option");
+    emptyAvatar.value = "";
+    emptyAvatar.textContent = "未绑定";
+    avatarSelect.append(emptyAvatar);
+    for (const avatar of state.avatars) {
+      const option = document.createElement("option");
+      option.value = avatar.id;
+      option.textContent = avatar.name;
+      avatarSelect.append(option);
+    }
+    avatarSelect.value = character.avatarId || "";
+    avatarSelect.addEventListener("change", () => saveCharacter(project, character.id, { avatarId: avatarSelect.value || null }));
+    avatarRow.append(avatarSelect);
+
+    const voiceRow = document.createElement("label");
+    voiceRow.className = "bind-row";
+    voiceRow.append(document.createTextNode("音色"));
+    const voiceSelect = document.createElement("select");
+    const emptyVoice = document.createElement("option");
+    emptyVoice.value = "";
+    emptyVoice.textContent = "未绑定";
+    voiceSelect.append(emptyVoice);
+    for (const voice of state.voices) {
+      const option = document.createElement("option");
+      option.value = voice.id;
+      option.textContent = voice.name;
+      voiceSelect.append(option);
+    }
+    voiceSelect.value = character.voiceId || "";
+    voiceSelect.addEventListener("change", () => saveCharacter(project, character.id, { voiceId: voiceSelect.value || null }));
+    voiceRow.append(voiceSelect);
+
+    card.append(name, personality, appearance, avatarRow, voiceRow);
     box.append(card);
+  }
+}
+
+async function saveCharacter(project, charId, patch) {
+  try {
+    const { data } = await api(`/api/drama/projects/${project.id}/characters/${charId}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch)
+    });
+    state.project = data.project;
+    renderProject();
+    toast("角色绑定已更新", "相关口播镜的旧成片已作废");
+  } catch (error) {
+    toast("绑定失败", error.message, "error");
+    renderProject(); // 回退选择框显示
   }
 }
 
@@ -275,7 +330,53 @@ function buildShotCard(project, shot) {
     actions.append(error);
   }
 
-  card.append(head, dialogue, action, prompt, frameBox, actions);
+  const clipBox = document.createElement("div");
+  clipBox.className = "shot-clip";
+  const clip = shot.clip || { status: "pending" };
+  if (clip.file) {
+    const video = document.createElement("video");
+    video.controls = true;
+    video.preload = "metadata";
+    video.src = `/drama-files/${project.id}/${clip.file}`;
+    clipBox.append(video);
+  }
+  const clipActions = document.createElement("div");
+  clipActions.className = "shot-actions";
+  const videoBtn = document.createElement("button");
+  videoBtn.className = "mini-btn";
+  videoBtn.textContent = ["ready", "confirmed"].includes(clip.status) ? "重新生成视频" : "生成视频";
+  videoBtn.disabled = !canGenerateVideo(project, shot) || clip.status === "generating";
+  videoBtn.title = videoBlockReason(project, shot);
+  videoBtn.addEventListener("click", () => generateVideo(project, shot));
+  clipActions.append(videoBtn);
+  if (clip.status === "generating") {
+    const busy = document.createElement("small");
+    busy.className = "muted";
+    busy.textContent = "视频生成中…";
+    clipActions.append(busy);
+  }
+  if (clip.status === "ready") {
+    const confirmBtn = document.createElement("button");
+    confirmBtn.className = "mini-btn primary-mini";
+    confirmBtn.textContent = "确认视频";
+    confirmBtn.addEventListener("click", () => confirmVideo(project, shot.id));
+    clipActions.append(confirmBtn);
+  }
+  if (clip.status === "confirmed") {
+    const tag = document.createElement("span");
+    tag.className = "badge confirmed";
+    tag.textContent = "视频已确认";
+    clipActions.append(tag);
+  }
+  if (clip.status === "failed") {
+    const error = document.createElement("small");
+    error.className = "error-text";
+    error.textContent = clip.error?.message || "视频生成失败";
+    clipActions.append(error);
+  }
+  clipBox.append(clipActions);
+
+  card.append(head, dialogue, action, prompt, frameBox, actions, clipBox);
   return card;
 }
 
@@ -291,6 +392,51 @@ function frameStatusText(shot) {
     confirmed: "",
     failed: "生成失败，可重试"
   }[shot.frame.status] || shot.frame.status;
+}
+
+function boundCharacter(project, shot) {
+  return project.analysis?.characters?.find((c) => c.id === shot.characterIds[0]) || null;
+}
+
+function videoBlockReason(project, shot) {
+  if (!project.gateAConfirmedAt) return "请先确认预算闸门";
+  if (shot.shotType === "dialogue") {
+    const character = boundCharacter(project, shot);
+    if (!character?.avatarId || !character?.voiceId) return "请先在角色卡绑定形象与音色";
+    if (!String(shot.dialogue || "").trim()) return "口播镜需要台词";
+    return "";
+  }
+  if (shot.frame.status !== "confirmed") return "剧情镜需要先确认首帧";
+  return "";
+}
+
+function canGenerateVideo(project, shot) {
+  return !videoBlockReason(project, shot);
+}
+
+async function generateVideo(project, shot) {
+  const clip = shot.clip || { status: "pending" };
+  const regen = ["ready", "confirmed"].includes(clip.status);
+  if (regen && !window.confirm("重新生成视频将产生额外费用，继续？")) return;
+  try {
+    await api(`/api/drama/projects/${project.id}/shots/${shot.id}/video`, {
+      method: "POST",
+      body: JSON.stringify(regen ? { confirmCost: true } : {})
+    });
+    schedulePoll(true);
+  } catch (error) {
+    toast("视频生成失败", error.message, "error");
+  }
+}
+
+async function confirmVideo(project, shotId) {
+  try {
+    const { data } = await api(`/api/drama/projects/${project.id}/shots/${shotId}/video-confirm`, { method: "POST", body: "{}" });
+    state.project = data.project;
+    renderProject();
+  } catch (error) {
+    toast("确认失败", error.message, "error");
+  }
 }
 
 function renderBudget(project) {
@@ -321,7 +467,17 @@ function renderGateB(project) {
   const confirmed = project.shots.filter((s) => s.frame.status === "confirmed").length;
   $("#gateBProgress").style.width = total ? `${(confirmed / total) * 100}%` : "0%";
   $("#gateBText").textContent = `${confirmed} / ${total}`;
-  $("#doneBanner").classList.toggle("hidden", !(total > 0 && project.status === "frames_confirmed"));
+  $("#doneBanner").classList.toggle("hidden", !(total > 0 && ["frames_confirmed", "clips_ready"].includes(project.status)));
+  const clipTotal = project.shots.length;
+  const clipConfirmed = project.shots.filter((s) => s.clip?.status === "confirmed").length;
+  $("#clipProgress").style.width = clipTotal ? `${(clipConfirmed / clipTotal) * 100}%` : "0%";
+  $("#clipText").textContent = `${clipConfirmed} / ${clipTotal}`;
+  if (project.status === "clips_ready") {
+    $("#doneBanner").textContent = "全部视频已确认，M3 流程完成。时间线合成导出属于 M4。";
+  } else if (project.status === "frames_confirmed") {
+    // 换绑/重抽首帧可从 clips_ready 回到 frames_confirmed，需恢复对应文案
+    $("#doneBanner").textContent = "首帧全部确认。现在可以逐镜生成视频（口播镜需先绑定角色形象与音色）。";
+  }
 }
 
 // ---------- 动作 ----------
@@ -449,7 +605,7 @@ function schedulePoll(immediate = false) {
   if (!project) return;
   const expectedId = project.id;
   const busy = RUNNING_STATUSES.includes(project.status)
-    || project.shots.some((s) => s.frame.status === "generating");
+    || project.shots.some((s) => s.frame.status === "generating" || s.clip?.status === "generating");
   if (immediate || busy) {
     state.pollTimer = setTimeout(async () => {
       try {
@@ -487,6 +643,8 @@ $("#newProjectBtn").addEventListener("click", () => {
   $("#budgetLines").innerHTML = '<p class="muted">流水线完成后生成</p>';
   $("#budgetTotal").textContent = "—";
   $("#shotCountBadge").textContent = "—";
+  $("#clipProgress").style.width = "0%";
+  $("#clipText").textContent = "0 / 0";
   showError(null);
 });
 $("#demoBtn").addEventListener("click", async () => {
@@ -504,5 +662,14 @@ $$("[data-anchor]").forEach((button) => {
   });
 });
 
+async function loadCatalogs() {
+  try {
+    const [avatars, voices] = await Promise.all([api("/api/avatars"), api("/api/voices")]);
+    state.avatars = avatars.data.avatars || [];
+    state.voices = (voices.data.voices || []).filter((v) => v.local || v.custom); // 口播镜只支持本地/自定义音色
+  } catch { /* 目录加载失败不阻塞页面 */ }
+}
+
 loadHealth();
+loadCatalogs();
 loadProjects().catch(() => toast("项目列表加载失败", "请检查本地服务", "error"));
