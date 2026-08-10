@@ -8,7 +8,9 @@ const state = {
   voices: [],
   pollTimer: null,
   view: "script",          // script | assets | story | generate
-  selectedShotId: null
+  selectedShotId: null,
+  ffmpegAvailable: null,   // null=未探测
+  showSubs: true           // 预览字幕开关
 };
 
 const RUNNING_STATUSES = ["analyzing", "directing", "prompting", "reviewing"];
@@ -142,6 +144,9 @@ function setView(name) {
   $("#viewAssets").classList.toggle("hidden", name !== "assets");
   $("#viewStory").classList.toggle("hidden", name !== "story");
   $("#viewGenerate").classList.toggle("hidden", name !== "generate");
+  if (name === "generate" && state.project && state.ffmpegAvailable === null) {
+    loadFfmpegStatus().then(() => { if (state.view === "generate") renderCompose(state.project); });
+  }
   renderStepper();
 }
 
@@ -198,6 +203,9 @@ function renderProject() {
   renderStory(project);
   renderBudget(project);
   renderGateB(project);
+  renderCompose(project);
+  renderSubtitleEditor(project);
+  renderBgm(project);
   $("#resumeBtn").classList.toggle("hidden", project.status !== "failed");
   $("#genAllFramesBtn").classList.toggle("hidden", !project.gateAConfirmedAt || !project.shots.some((s) => ["pending", "failed"].includes(s.frame.status)));
   if (project.status === "failed" && project.pipeline?.error) {
@@ -700,3 +708,131 @@ renderStepper();
 loadHealth();
 loadCatalogs();
 loadProjects().catch(() => toast("项目列表加载失败", "请检查本地服务", "error"));
+
+// ---------- M5 合成导出 ----------
+async function loadFfmpegStatus() {
+  if (!state.project) { state.ffmpegAvailable = null; return null; }
+  try {
+    const { data } = await api(`/api/drama/projects/${state.project.id}/compose/ffmpeg`);
+    state.ffmpegAvailable = Boolean(data.available);
+  } catch { state.ffmpegAvailable = false; }
+  return state.ffmpegAvailable;
+}
+
+function renderCompose(project) {
+  const banner = $("#ffmpegBanner");
+  if (banner) banner.classList.toggle("hidden", state.ffmpegAvailable !== false);
+  const status = $("#composeStatus");
+  const compose = project?.compose || { status: "idle" };
+  const notReady = (project?.shots || []).filter((s) => s.clip?.status !== "confirmed");
+  const btn = $("#composeBtn");
+  if (btn) btn.disabled = !project || state.ffmpegAvailable === false || compose.status === "running" || notReady.length > 0;
+  if (!project) status.textContent = "尚未合成";
+  else if (compose.status === "running") status.textContent = "正在合成…";
+  else if (compose.status === "succeeded") status.textContent = "已合成，可预览导出";
+  else if (compose.status === "failed") status.textContent = `合成失败：${compose.error?.message || "未知错误"}（可重试）`;
+  else status.textContent = notReady.length ? `还有 ${notReady.length} 个分镜视频未确认` : "就绪，可合成";
+
+  const preview = $("#composePreview");
+  const mp4 = $("#exportMp4"); const srt = $("#exportSrt");
+  if (preview) preview.innerHTML = "";
+  if (compose.status === "succeeded" && compose.file) {
+    const v = document.createElement("video");
+    v.controls = true;
+    v.src = `/drama-files/${project.id}/compose/${compose.file}`;
+    if (preview) preview.appendChild(v);
+    if (mp4) { mp4.href = v.src; mp4.classList.remove("hidden"); }
+    if (srt) {
+      if (compose.srtFile) { srt.href = `/drama-files/${project.id}/compose/${compose.srtFile}`; srt.classList.remove("hidden"); }
+      else srt.classList.add("hidden");
+    }
+  } else {
+    if (mp4) mp4.classList.add("hidden");
+    if (srt) srt.classList.add("hidden");
+  }
+}
+
+function renderSubtitleEditor(project) {
+  const box = $("#subtitleList");
+  if (!box) return;
+  box.innerHTML = "";
+  const talkShots = (project?.shots || []).filter((s) => String(s.dialogue || "").trim());
+  if (!talkShots.length) { box.innerHTML = `<p class="muted">暂无台词分镜</p>`; return; }
+  let cursor = 0;
+  for (const shot of project.shots) {
+    const dur = Number(shot.durationSec) || 0;
+    if (String(shot.dialogue || "").trim()) {
+      const row = document.createElement("div");
+      row.className = "vz-sub-row";
+      const tm = document.createElement("span"); tm.className = "tm"; tm.textContent = `镜${shot.index} · ${cursor}s–${cursor + dur}s`;
+      const input = document.createElement("input"); input.value = shot.dialogue; input.maxLength = 600;
+      input.addEventListener("change", () => saveShot(state.project, shot.id, { dialogue: input.value }));
+      row.append(tm, input);
+      box.appendChild(row);
+    }
+    cursor += dur;
+  }
+}
+
+function renderBgm(project) {
+  const name = $("#bgmName"); const vol = $("#bgmVolume"); const volVal = $("#bgmVolumeVal");
+  if (!name) return;
+  const bgm = project?.bgm || null;
+  name.textContent = bgm ? bgm.name : "未设置";
+  const pct = Math.round((bgm?.volume ?? 0.3) * 100);
+  if (vol) vol.value = pct;
+  if (volVal) volVal.textContent = `${pct}%`;
+}
+
+async function startCompose() {
+  if (!state.project) return;
+  try {
+    await api(`/api/drama/projects/${state.project.id}/compose`, { method: "POST", body: "{}" });
+    toast("已开始合成", "正在拼接分镜、混音与封装字幕");
+    schedulePoll();
+  } catch (error) { showError(error.message || error); }
+}
+
+async function generateVoice(shotId) {
+  if (!state.project) return;
+  try {
+    await api(`/api/drama/projects/${state.project.id}/shots/${shotId}/voice`, { method: "POST", body: "{}" });
+    toast("已开始生成配音", "完成后可在合成时使用");
+    schedulePoll();
+  } catch (error) { showError(error.message || error); }
+}
+
+async function generateAllVoices() {
+  const project = state.project;
+  if (!project) return;
+  const targets = project.shots.filter((s) => s.shotType === "dialogue" && s.audioMode === "voice" && String(s.dialogue || "").trim() && s.clip?.audio?.status !== "ready");
+  for (const s of targets) {
+    await api(`/api/drama/projects/${project.id}/shots/${s.id}/voice`, { method: "POST", body: "{}" }).catch(() => {});
+  }
+  if (targets.length) { toast("已排队生成配音", `${targets.length} 个对白镜`); schedulePoll(); }
+}
+
+async function uploadBgm(file) {
+  if (!state.project || !file) return;
+  const dataUrl = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+  try {
+    const { data } = await api(`/api/drama/projects/${state.project.id}/bgm`, {
+      method: "POST",
+      body: JSON.stringify({ name: file.name.replace(/\.[^.]+$/, ""), audioData: dataUrl, volume: Number($("#bgmVolume").value) / 100 })
+    });
+    state.project = data.project;
+    renderBgm(state.project);
+    toast("背景音乐已设置", "合成时将混入并闪避到台词下");
+  } catch (error) { showError(error.message || error); }
+}
+
+// M5 事件绑定
+if ($("#composeBtn")) $("#composeBtn").addEventListener("click", startCompose);
+if ($("#bgmPick")) $("#bgmPick").addEventListener("click", () => $("#bgmFile").click());
+if ($("#bgmFile")) $("#bgmFile").addEventListener("change", (e) => { const f = e.target.files?.[0]; if (f) uploadBgm(f); e.target.value = ""; });
+if ($("#bgmVolume")) $("#bgmVolume").addEventListener("change", (e) => { const el = $("#bgmVolumeVal"); if (el) el.textContent = `${e.target.value}%`; if (state.project?.bgm) toast("音量将在下次合成时生效", "重新合成以应用"); });
