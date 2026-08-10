@@ -1,0 +1,117 @@
+/* public/drama.css — VOZEB 浅色风（仅短剧编辑器使用） */
+body.drama-body {
+  --bg:#fafbfc; --card:#ffffff; --border:#e5e8ec; --text:#20242a;
+  --soft:#f1f3f5; --muted:#697381; --primary:#20242a; --ok:#2fa46a; --danger:#d6453d;
+  margin:0; background:var(--bg); color:var(--text);
+  font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
+}
+body.drama-body * { box-sizing:border-box; }
+body.drama-body button { font:inherit; cursor:pointer; color:inherit; }
+body.drama-body .mono { font-family:ui-monospace,"DM Mono",monospace; }
+body.drama-body .hidden { display:none !important; }
+body.drama-body .muted { color:var(--muted); font-size:12px; }
+
+/* 骨架 */
+.vz-app { display:grid; grid-template-columns:52px 1fr; min-height:100vh; }
+.vz-rail { background:#fff; border-right:1px solid var(--border); display:flex; flex-direction:column; align-items:center; padding:10px 0; gap:6px; position:sticky; top:0; height:100vh; }
+.vz-logo { width:32px; height:32px; border-radius:9px; background:var(--primary); color:#fff; display:grid; place-items:center; font-weight:800; margin-bottom:8px; }
+.vz-ic { width:36px; height:36px; border:0; border-radius:9px; background:transparent; color:#8a93a0; font-size:16px; display:grid; place-items:center; }
+.vz-ic.on { background:var(--soft); color:var(--text); }
+.vz-ic:hover { background:var(--soft); }
+.vz-main { display:flex; flex-direction:column; min-width:0; }
+.vz-topbar { height:52px; background:#fff; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding:0 16px; gap:12px; position:sticky; top:0; z-index:5; }
+.vz-topbar .t { display:flex; align-items:center; gap:8px; font-weight:600; font-size:14px; }
+.vz-topbar .r { display:flex; align-items:center; gap:10px; }
+.vz-content { padding:16px 18px 40px; display:flex; flex-direction:column; gap:14px; max-width:1240px; width:100%; margin:0 auto; }
+.vz-card { background:var(--card); border:1px solid var(--border); border-radius:14px; }
+
+/* 顶栏控件 */
+.vz-provider { display:flex; align-items:center; gap:5px; background:#fff; border:1px solid var(--border); border-radius:8px; padding:3px 8px 3px 4px; font-size:11px; }
+.vz-provider .lg { width:16px; height:16px; border-radius:5px; display:grid; place-items:center; font:700 8px ui-monospace,monospace; background:var(--soft); color:var(--text); }
+.vz-provider i { width:5px; height:5px; border-radius:50%; background:#c3c9d1; }
+.vz-provider[data-mode="on"] i { background:var(--ok); }
+.vz-provider[data-mode="demo"] i { background:#e6b800; }
+.vz-provider[data-mode="off"] i { background:#c3c9d1; }
+.vz-btn { border:1px solid var(--border); background:#fff; border-radius:9px; padding:7px 13px; font-size:12px; font-weight:600; }
+.vz-btn:hover { background:var(--soft); }
+.vz-btn-primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+.vz-btn-primary:hover { background:#000; }
+.vz-btn-primary:disabled { opacity:.45; cursor:not-allowed; }
+.vz-select { border:1px solid var(--border); background:#fff; border-radius:9px; padding:7px 10px; font-size:12px; max-width:220px; }
+
+/* 项目头 + 步骤条 */
+.vz-projhead { padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.vz-projhead h1 { font-size:16px; margin:0; }
+.vz-projhead p { font-size:11px; color:var(--muted); margin:2px 0 0; }
+.vz-projhead .tags { display:flex; align-items:center; gap:12px; color:var(--muted); font-size:11px; }
+.vz-stepper { display:flex; gap:8px; padding:12px; list-style:none; margin:0; }
+.vz-step { flex:1; display:flex; align-items:center; justify-content:center; gap:7px; padding:11px; border-radius:10px; color:#9aa3af; font-size:12px; border:1px solid transparent; background:transparent; }
+.vz-step .no { font:10px ui-monospace,monospace; color:#b6bdc7; }
+.vz-step.on { background:var(--primary); color:#fff; font-weight:600; }
+.vz-step.on .no { color:#cbd3dc; }
+.vz-step.done { color:var(--text); }
+
+/* banner */
+.vz-banner { padding:10px 14px; border-radius:10px; font-size:12px; background:#fff8e6; border:1px solid #f0e0a8; color:#7a5d00; }
+.vz-banner.error { background:#fdeceb; border-color:#f3c1be; color:var(--danger); }
+
+/* 工作区：视图切换 */
+.vz-view { display:flex; flex-direction:column; gap:14px; }
+/* 分镜工作区 */
+.vz-story { display:grid; grid-template-columns:1fr 320px; gap:14px; align-items:start; }
+.vz-preview { padding:14px; }
+.vz-preview .ph { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.vz-preview .ph b { font-size:13px; } .vz-preview .ph span { font-size:11px; color:var(--muted); }
+.vz-stage { position:relative; height:420px; border-radius:12px; background:linear-gradient(150deg,#2a3140,#161a22); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.vz-stage .frm { position:relative; height:88%; aspect-ratio:9/16; border-radius:10px; overflow:hidden; background:#0d1017; border:1px solid rgba(255,255,255,.15); display:flex; align-items:center; justify-content:center; }
+.vz-stage .frm img, .vz-stage .frm video { width:100%; height:100%; object-fit:cover; display:block; }
+.vz-stage .frm .empty { color:#8a93a0; font-size:12px; }
+.vz-stage .stagetag { position:absolute; top:10px; left:11px; font-size:11px; color:#fff; background:rgba(0,0,0,.45); padding:2px 8px; border-radius:6px; }
+/* 分镜条 */
+.vz-strip { margin-top:12px; }
+.vz-strip .sl { display:flex; justify-content:space-between; margin-bottom:7px; font-size:11px; color:var(--muted); }
+.vz-film { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; }
+.vz-th { position:relative; flex:0 0 84px; aspect-ratio:9/12; border-radius:10px; overflow:hidden; border:1px solid var(--border); background:#eef0f3; cursor:pointer; padding:0; }
+.vz-th img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.vz-th .num { position:absolute; left:5px; top:5px; font:700 9px ui-monospace,monospace; color:#fff; background:rgba(0,0,0,.45); padding:1px 4px; border-radius:4px; }
+.vz-th .bdg { position:absolute; right:4px; top:4px; font-size:8px; padding:1px 4px; border-radius:4px; background:rgba(255,255,255,.9); color:#5a6470; }
+.vz-th .bdg.dialogue { color:#2f6fd0; } .vz-th .bdg.cinematic { color:#7a5d00; }
+.vz-th .ok { position:absolute; right:5px; bottom:5px; width:14px; height:14px; border-radius:50%; background:var(--primary); color:#fff; display:grid; place-items:center; font-size:8px; }
+.vz-th .dur { position:absolute; left:5px; bottom:6px; font-size:9px; color:#fff; text-shadow:0 1px 2px #000; }
+.vz-th.sel { border-color:var(--primary); box-shadow:0 0 0 2px rgba(32,36,42,.18); }
+.vz-th.failed { border-color:var(--danger); }
+/* 检查器 */
+.vz-insp { padding:14px; position:sticky; top:66px; }
+.vz-tabs { display:flex; gap:4px; background:var(--soft); border-radius:9px; padding:3px; }
+.vz-tabs button { flex:1; border:0; background:transparent; font-size:12px; padding:6px 0; border-radius:7px; color:#8a93a0; }
+.vz-tabs button.on { background:#fff; color:var(--text); font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+.vz-field { margin-top:12px; }
+.vz-field > label { display:block; font-size:11px; color:#6a727e; margin-bottom:5px; font-weight:500; }
+.vz-field textarea, .vz-field select, .vz-field input { width:100%; background:#fff; border:1px solid var(--border); border-radius:9px; padding:8px; font-size:12px; color:var(--text); }
+.vz-field textarea { resize:vertical; line-height:1.6; }
+.vz-rowline { display:flex; align-items:center; gap:8px; }
+.vz-minithumb { width:44px; height:62px; border-radius:8px; border:1px solid var(--border); object-fit:cover; background:#eef0f3; }
+.vz-seg { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+.vz-seg button { text-align:center; font-size:11px; padding:7px 0; border:1px solid var(--border); border-radius:8px; color:#8a93a0; background:#fff; }
+.vz-seg button.on { color:#fff; background:var(--primary); border-color:var(--primary); font-weight:600; }
+.vz-apply { width:100%; margin-top:14px; background:var(--primary); color:#fff; border:0; border-radius:10px; padding:11px; font-size:12px; font-weight:700; }
+.vz-hint { font-size:10px; color:var(--muted); text-align:center; margin-top:7px; }
+/* 角色卡 / 预算 */
+.vz-char { border:1px solid var(--border); border-radius:10px; padding:10px; margin-top:8px; }
+.vz-char .bind-row { display:flex; align-items:center; gap:8px; font-size:11px; margin-top:6px; }
+.vz-char .bind-row select { flex:1; min-width:0; }
+.vz-budget-row { display:flex; justify-content:space-between; font-size:12px; padding:6px 0; }
+.vz-budget-row span { color:var(--muted); }
+.vz-budget-total { display:flex; justify-content:space-between; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); font-size:14px; }
+.vz-progress { flex:1; height:6px; border-radius:99px; background:var(--soft); overflow:hidden; }
+.vz-progress i { display:block; height:100%; background:var(--primary); }
+/* 弹窗 / toast */
+.vz-modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(15,17,20,.45); z-index:50; }
+.vz-modal.open { display:flex; }
+.vz-modal-card { width:min(480px,92vw); background:#fff; border:1px solid var(--border); border-radius:16px; padding:22px; }
+.vz-modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
+.vz-toast-wrap { position:fixed; right:18px; bottom:18px; z-index:80; display:grid; gap:8px; }
+.vz-toast { width:300px; padding:12px 14px; border:1px solid var(--border); border-radius:11px; background:#fff; box-shadow:0 18px 45px rgba(0,0,0,.18); }
+.vz-toast b { display:block; font-size:12px; } .vz-toast span { color:var(--muted); font-size:11px; }
+.vz-toast.error { border-color:#f3c1be; } .vz-toast.success { border-color:#b7e2c8; }
+@media (max-width:1100px) { .vz-story { grid-template-columns:1fr; } .vz-insp { position:static; } }
