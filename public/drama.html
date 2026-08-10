@@ -77,6 +77,35 @@
 
         <!-- 生成视图 -->
         <section class="vz-view hidden" id="viewGenerate">
+          <div class="vz-banner hidden" id="ffmpegBanner" style="margin-bottom:12px">⚠ 未检测到本机 FFmpeg，无法合成成片。请先安装（macOS：<code>brew install ffmpeg</code>）；字幕校对与分镜编辑不受影响。</div>
+
+          <div class="vz-card" style="padding:14px" id="composeCard">
+            <b style="font-size:13px">合成成片</b>
+            <p class="muted" id="composeStatus" style="margin-top:6px">尚未合成</p>
+            <div class="vz-rowline" style="margin-top:8px"><button class="vz-btn vz-btn-primary" id="composeBtn">⚙ 合成成片</button></div>
+            <div id="composePreview" style="margin-top:10px"></div>
+            <div class="vz-rowline" id="exportBar" style="margin-top:8px">
+              <a class="vz-btn hidden" id="exportMp4" download>导出 MP4</a>
+              <a class="vz-btn hidden" id="exportSrt" download>导出 SRT</a>
+            </div>
+          </div>
+
+          <div class="vz-card" style="padding:14px" id="subtitleCard">
+            <b style="font-size:13px">字幕校对</b>
+            <p class="muted" style="margin-top:6px">编辑台词文本即更新字幕；时间轴按各镜时长自动累计。</p>
+            <div id="subtitleList" style="margin-top:8px"></div>
+          </div>
+
+          <div class="vz-card" style="padding:14px" id="bgmCard">
+            <b style="font-size:13px">背景音乐</b>
+            <div class="vz-rowline" style="margin-top:8px">
+              <input id="bgmFile" type="file" accept="audio/mpeg,audio/mp3,audio/wav,audio/m4a" hidden />
+              <button class="vz-btn" id="bgmPick">选择音频…</button>
+              <span class="muted" id="bgmName">未设置</span>
+            </div>
+            <div class="vz-field" style="margin-top:8px"><label class="muted">音量 <span id="bgmVolumeVal">30%</span></label><input id="bgmVolume" type="range" min="0" max="100" value="30" /></div>
+          </div>
+
           <div class="vz-card" style="padding:14px">
             <b style="font-size:13px">预算单（预估）</b>
             <div id="budgetLines"></div>

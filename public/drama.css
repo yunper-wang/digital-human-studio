@@ -115,3 +115,11 @@ body.drama-body .muted { color:var(--muted); font-size:12px; }
 .vz-toast b { display:block; font-size:12px; } .vz-toast span { color:var(--muted); font-size:11px; }
 .vz-toast.error { border-color:#f3c1be; } .vz-toast.success { border-color:#b7e2c8; }
 @media (max-width:1100px) { .vz-story { grid-template-columns:1fr; } .vz-insp { position:static; } }
+
+/* M5 合成导出 */
+#composePreview video { width:100%; max-height:320px; border-radius:10px; background:#000; display:block; }
+#exportBar a.vz-btn { text-decoration:none; display:inline-block; }
+.vz-sub-row { display:flex; gap:8px; align-items:center; padding:8px; border:1px solid var(--border); border-radius:10px; margin-top:6px; background:#fff; }
+.vz-sub-row .tm { font:10px "DM Mono",monospace; color:var(--muted); white-space:nowrap; }
+.vz-sub-row input { flex:1; border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:12px; color:var(--text); background:#fff; }
+.vz-field input[type="range"] { accent-color:var(--primary); }
