@@ -335,6 +335,11 @@ function renderStrip(project) {
     if (url) { const img = document.createElement("img"); img.src = url; img.alt = `镜${shot.index}`; th.append(img); }
     const num = document.createElement("span"); num.className = "num"; num.textContent = shot.index; th.append(num);
     const bdg = document.createElement("span"); bdg.className = `bdg ${shot.shotType}`; bdg.textContent = shot.shotType === "dialogue" ? "词" : "画"; th.append(bdg);
+    if (shot.shotType === "dialogue") {
+      const audio = shot.clip?.audio || {};
+      const vtxt = audio.status === "ready" ? "🎙" : audio.status === "generating" ? "…" : shot.audioMode === "none" ? "🔇" : "";
+      if (vtxt) { const vb = document.createElement("span"); vb.className = "vz-voice"; vb.textContent = vtxt; th.append(vb); }
+    }
     const dur = document.createElement("span"); dur.className = "dur"; dur.textContent = `${shot.durationSec}s`; th.append(dur);
     if (shot.frame.status === "confirmed") { const ok = document.createElement("span"); ok.className = "ok"; ok.textContent = "✓"; th.append(ok); }
     th.addEventListener("click", () => selectShot(shot.id));
@@ -349,6 +354,8 @@ function renderPreview(project, shot) {
   meta.textContent = `镜 ${shot.index} / ${project.shots.length} · ${shot.shotType === "dialogue" ? "口播镜" : "剧情镜"} · ${shot.durationSec}s`;
   stage.innerHTML = "";
   const tag = document.createElement("span"); tag.className = "stagetag"; tag.textContent = `镜 ${shot.index}`; stage.append(tag);
+  const subsBtn = document.createElement("button"); subsBtn.className = "vz-subs-toggle" + (state.showSubs === false ? "" : " on"); subsBtn.textContent = "字幕"; subsBtn.title = "字幕开关"; stage.append(subsBtn);
+  subsBtn.addEventListener("click", () => { state.showSubs = state.showSubs === false; renderPreview(project, shot); });
   const frm = document.createElement("div"); frm.className = "frm";
   const clip = shot.clip || { status: "pending" };
   if (clip.file) {
@@ -357,6 +364,9 @@ function renderPreview(project, shot) {
     const img = document.createElement("img"); img.src = frameUrl(project, shot); img.alt = `镜${shot.index}首帧`; frm.append(img);
   } else {
     const s = document.createElement("span"); s.className = "empty"; s.textContent = frameStatusText(shot) || "待生成首帧"; frm.append(s);
+  }
+  if (String(shot.dialogue || "").trim()) {
+    const cap = document.createElement("div"); cap.className = "cap" + (state.showSubs === false ? " hidden" : ""); cap.textContent = shot.dialogue; frm.append(cap);
   }
   stage.append(frm);
 }
@@ -507,7 +517,7 @@ function renderGateB(project) {
   $("#clipProgress").style.width = clipTotal ? `${(clipConfirmed / clipTotal) * 100}%` : "0%";
   $("#clipText").textContent = `${clipConfirmed} / ${clipTotal}`;
   if (project.status === "clips_ready") {
-    $("#doneBanner").textContent = "全部视频已确认。时间线合成导出属于后续里程碑（M5）。";
+    $("#doneBanner").textContent = "全部视频已确认。可前往「镜头生成」视图合成成片。";
   } else if (project.status === "frames_confirmed") {
     // 换绑/重抽首帧可从 clips_ready 回到 frames_confirmed，需恢复对应文案
     $("#doneBanner").textContent = "首帧全部确认。现在可以逐镜生成视频（口播镜需先绑定角色形象与音色）。";
