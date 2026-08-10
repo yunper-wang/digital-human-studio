@@ -169,3 +169,9 @@ test("clip 增加 audio 生命周期，project 增加 bgm/compose", () => {
   assert.equal(d.bgm, null);
   assert.equal(d.compose.status, "idle");
 });
+
+test("normalizeProject 保留 review_blocked，未知 status 回退 draft", () => {
+  const base = { id: "drama-z", title: "t", script: "s", ratio: "portrait" };
+  assert.equal(normalizeProject({ ...base, status: "review_blocked" }).status, "review_blocked");
+  assert.equal(normalizeProject({ ...base, status: "bogus" }).status, "draft");
+});
