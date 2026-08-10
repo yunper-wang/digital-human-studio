@@ -8,7 +8,7 @@ import { createServer } from "node:http";
 import { createDramaStore } from "./lib/drama/store.mjs";
 import { handleDramaApi } from "./lib/drama/routes.mjs";
 import { getDramaLlmConfig, dramaLlmStatus } from "./lib/drama/llm.mjs";
-import { getComfyuiConfig, getComfyuiStatus } from "./lib/drama/comfyui.mjs";
+import { getComfyuiConfig, getComfyuiStatus, loadVideoWorkflowTemplate } from "./lib/drama/comfyui.mjs";
 import { getDramaPricing } from "./lib/drama/budget.mjs";
 import { buildSeedancePrompt, downloadReference, resolveSeedanceAvatar, resolveSeedanceVoice, runSeedanceGeneration } from "./lib/seedance.mjs";
 
@@ -404,6 +404,8 @@ async function ensureVoicebox() {
 
 async function providerHealth() {
   const seedance2 = getSeedanceStatus();
+  const comfyStatus = await getComfyuiStatus(comfyuiConfig);
+  const hasVideoTemplate = Boolean(loadVideoWorkflowTemplate());
   let elevenlabs = { configured: Boolean(elevenKey), connected: false, state: elevenKey ? "checking" : "missing" };
   if (elevenKey) {
     try {
@@ -424,7 +426,12 @@ async function providerHealth() {
     },
     voicebox: await voiceboxHealth(),
     dramaLlm: await dramaLlmStatus(dramaLlmConfig),
-    comfyui: await getComfyuiStatus(comfyuiConfig)
+    comfyui: comfyStatus,
+    dramaVideo: {
+      configured: hasVideoTemplate,
+      connected: hasVideoTemplate && comfyStatus.connected,
+      state: hasVideoTemplate ? comfyStatus.state : "template_missing"
+    }
   };
 }
 
@@ -533,6 +540,18 @@ function integrationContract(providers) {
         configKeys: ["COMFYUI_URL"],
         optionalConfigKeys: ["COMFYUI_FLUX_UNET", "COMFYUI_CLIP1", "COMFYUI_CLIP2", "COMFYUI_VAE", "COMFYUI_FLUX_STEPS"],
         description: "连接你本机的 ComfyUI 服务，用 Flux 为每个分镜生成首帧；本机算力不产生 API 费用。"
+      },
+      {
+        id: "drama-video-workflow",
+        name: "剧情镜视频工作流",
+        provider: "ComfyUI 模板（MiniMax H3 等图生视频）",
+        requirement: "optional",
+        requirementLabel: "可选",
+        configured: Boolean(providers.dramaVideo?.configured),
+        connected: Boolean(providers.dramaVideo?.connected),
+        configKeys: ["DRAMA_VIDEO_WORKFLOW"],
+        optionalConfigKeys: ["COMFYUI_VIDEO_TIMEOUT_MS"],
+        description: "把你调好的图生视频工作流导出为 API 格式 JSON；程序注入已确认首帧与运动提示词后提交本机 ComfyUI。"
       }
     ],
     appApi: [
@@ -546,7 +565,9 @@ function integrationContract(providers) {
       { method: "GET", path: "/api/drama/projects/{id}", purpose: "查询短剧项目与流水线状态" },
       { method: "POST", path: "/api/drama/projects/{id}/pipeline", purpose: "发起或续跑编排流水线" },
       { method: "POST", path: "/api/drama/projects/{id}/gate-a", purpose: "确认短剧预算闸门" },
-      { method: "POST", path: "/api/drama/projects/{id}/shots/{shotId}/frame", purpose: "生成或换抽分镜首帧" }
+      { method: "POST", path: "/api/drama/projects/{id}/shots/{shotId}/frame", purpose: "生成或换抽分镜首帧" },
+      { method: "PATCH", path: "/api/drama/projects/{id}/characters/{charId}", purpose: "绑定角色形象与音色" },
+      { method: "POST", path: "/api/drama/projects/{id}/shots/{shotId}/video", purpose: "生成或重生成分镜视频" }
     ]
   };
 }
@@ -1069,9 +1090,11 @@ function serveStatic(response, pathname) {
     createReadStream(uploadPath).pipe(response);
     return true;
   }
-  const dramaFileMatch = pathname.match(/^\/drama-files\/(drama-[a-f0-9-]+)\/([a-z0-9-]+\.(png|jpg|webp))$/i);
+  const dramaFileMatch = pathname.match(/^\/drama-files\/(drama-[a-f0-9-]+)\/([a-z0-9-]+\.(png|jpg|webp|mp4|webm))$/i);
   if (dramaFileMatch) {
-    const filePath = join(dramaStore.dir(dramaFileMatch[1]), "frames", dramaFileMatch[2]);
+    // 首帧在 frames/，视频成片在 clips/：按扩展名选择子目录
+    const subdir = /\.(mp4|webm)$/i.test(dramaFileMatch[2]) ? "clips" : "frames";
+    const filePath = join(dramaStore.dir(dramaFileMatch[1]), subdir, dramaFileMatch[2]);
     if (!existsSync(filePath) || !statSync(filePath).isFile()) return false;
     response.writeHead(200, {
       "Cache-Control": "private, max-age=3600",
