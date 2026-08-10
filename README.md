@@ -2,7 +2,7 @@
 
 # 造人局 · Digital Human Studio
 
-**从口播脚本到数字人成片，一个本机优先、费用可控的桌面工作台。**
+**把短剧剧本交给 LLM 导演拆镜，逐镜生成数字人口播与剧情画面——一个本机优先、费用可控的桌面工作台。**
 
 [![CI](https://github.com/francoeur003/digital-human-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/francoeur003/digital-human-studio/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-d8ff3e.svg)](LICENSE)
@@ -15,16 +15,16 @@
 
 ## 它解决什么
 
-数字人口播的麻烦往往不在某一个模型，而在脚本、人物、音色、参数、费用确认和任务状态散落在不同地方。Digital Human Studio 把这些步骤收进一个桌面界面，同时将真实密钥、本地节点和个人素材留在你的电脑上。
+AI 短剧的麻烦往往不在某一个模型，而在剧本、分镜、角色形象、音色、预算确认和逐镜任务状态散落在不同地方。Digital Human Studio 把这些步骤收进一个桌面界面，用 LLM 把剧本拆成分镜表，再逐镜生成画面，同时将真实密钥、本地节点和个人素材留在你的电脑上。
 
 ## 功能亮点
 
-- 口播脚本编辑、字数/时长预估、节奏化改写和高留存模板。
-- 数字人形象选择，支持本地 JPG/PNG/WebP 与用户自有 HTTPS 图片。
-- 音色目录、样音预览与稳定度/相似度/语速调整。
-- 竖屏、横屏、方形构图与字幕安全区预览。
-- `taskId + 轮询 + 幂等键` 的长任务模型，有 loading/error/timeout 状态。
-- 真实生成前强制费用确认，失败不会自动付费重试。
+- LLM 编排流水线：剧本分析、导演分镜、首帧提示词、文本审核四个阶段，可从失败阶段断点续跑。
+- 分镜表：每镜的镜头类型、运镜、台词、情绪与时长，支持逐镜编辑与换抽。
+- 角色资产卡：给每个角色绑定数字人形象与本地/自定义音色，跨镜保持一致。
+- 双引擎逐镜生成：台词镜走 Seedance 数字人口播，纯画面镜走本机 ComfyUI 图生视频。
+- 两道费用闸门：先确认剧集级预算（Gate A）再生成首帧，首帧全部确认（Gate B）才放行视频；改台词或时长会使确认失效。
+- 首帧使用本机算力（¥0），真实付费生成前强制确认，失败不会自动付费重试。
 - 默认展示脱敏演示数据，不含 API Key、Token、节点地址、个人路径或历史任务。
 
 <table>
@@ -53,15 +53,17 @@ npm run app
 npm start
 ```
 
-然后打开 `http://127.0.0.1:4199`。没有配置任何外部服务时，界面和无费用流程检查仍然可用。
+然后打开 `http://127.0.0.1:4199`。没有配置任何外部服务时，短剧界面会进入本机演示编排（mock），不产生任何费用。
 
 ## 需要接入什么
 
 | 能力 | 接口 | 要求 |
 | --- | --- | --- |
-| 数字人成片 | Seedance 2.0 生成权限与本机适配器 | 必需 |
-| 云端配音 | ElevenLabs API Key | 可选 |
-| 火山语音 | Doubao-Seed-TTS 2.0 / 声音复刻 2.0 | 可选 |
+| 口播镜视频 | Seedance 2.0 生成权限与本机适配器 | 含口播镜时必需 |
+| 剧情镜首帧 / 视频 | 本机 ComfyUI（Flux 首帧 + 图生视频模板） | 可选，首帧免费 |
+| 短剧编排模型 | OpenAI 兼容端点（`DRAMA_LLM_*`） | 可选，缺省走本机演示编排 |
+| 云端配音 | ElevenLabs API Key | 可选（口播镜音色参考） |
+| 火山语音 | Doubao-Seed-TTS 2.0 / 声音复刻 2.0 | 可选（口播镜音色参考） |
 | 本地克隆音色 | Voicebox + Qwen3-TTS 1.7B，支持自动检测 | 可选、免费 |
 
 点击软件左下角的“接入说明”，或点击顶部任一供应商状态，即可看到实时连接状态并一键复制接入清单。程序还提供只读的 `GET /api/integrations`，仅返回配置项名称和脱敏状态。完整约定见 [接入说明与公开接口](docs/INTEGRATION-CONTRACT.md)。
@@ -100,7 +102,7 @@ flowchart LR
   API --> STORE["Local app data"]
   API -. "user-configured adapter" .-> VIDEO["Video generation provider"]
   API -. "user-configured adapter" .-> VOICE["Voice provider / local voice node"]
-  API --> GUARD["Cost confirmation + idempotency"]
+  API --> GUARD["Budget gates + cost confirmation"]
 ```
 
 更多细节见 [架构说明](docs/ARCHITECTURE.md)。

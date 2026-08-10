@@ -1,6 +1,6 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
-import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { arch, homedir, platform } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -10,15 +10,11 @@ import { handleDramaApi } from "./lib/drama/routes.mjs";
 import { getDramaLlmConfig, dramaLlmStatus } from "./lib/drama/llm.mjs";
 import { getComfyuiConfig, getComfyuiStatus, loadVideoWorkflowTemplate } from "./lib/drama/comfyui.mjs";
 import { getDramaPricing } from "./lib/drama/budget.mjs";
-import { buildSeedancePrompt, downloadReference, resolveSeedanceAvatar, resolveSeedanceVoice, runSeedanceGeneration } from "./lib/seedance.mjs";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 const publicRoot = join(projectRoot, "public");
 const dataRoot = process.env.DATA_DIR || join(projectRoot, "data");
-const outputRoot = join(dataRoot, "outputs");
 const uploadRoot = join(dataRoot, "uploads");
-const seedanceRunRoot = join(dataRoot, "seedance-runs");
-const tasksFile = join(dataRoot, "tasks.json");
 const privateAvatarFile = join(projectRoot, "config", "avatars.json");
 const exampleAvatarFile = join(projectRoot, "config", "avatars.example.json");
 const customAvatarFile = join(dataRoot, "custom-avatars.json");
@@ -35,13 +31,9 @@ const volcengineTtsResourceId = process.env.VOLCENGINE_TTS_RESOURCE_ID || "seed-
 const volcengineTtsVoiceType = process.env.VOLCENGINE_TTS_VOICE_TYPE || "";
 const voiceboxOfficialUrl = "https://voicebox.sh/download";
 const voiceboxDocsUrl = "https://docs.voicebox.sh/overview/installation";
-const tasks = new Map();
-const idempotency = new Map();
 const rateWindow = new Map();
 
-mkdirSync(outputRoot, { recursive: true });
 mkdirSync(uploadRoot, { recursive: true });
-mkdirSync(seedanceRunRoot, { recursive: true });
 
 function loadEnv(path) {
   if (!existsSync(path)) return;
@@ -396,12 +388,6 @@ async function voiceboxHealth() {
   }
 }
 
-async function ensureVoicebox() {
-  const health = await voiceboxHealth();
-  if (health.connected) return health;
-  throw Object.assign(new Error("本地语音服务未启动"), { code: "VOICEBOX_UNAVAILABLE", retryable: true });
-}
-
 async function providerHealth() {
   const seedance2 = getSeedanceStatus();
   const comfyStatus = await getComfyuiStatus(comfyuiConfig);
@@ -559,8 +545,6 @@ function integrationContract(providers) {
       { method: "GET", path: "/api/integrations", purpose: "接入要求与脱敏状态" },
       { method: "GET", path: "/api/avatars", purpose: "数字人目录" },
       { method: "GET", path: "/api/voices", purpose: "音色目录" },
-      { method: "POST", path: "/api/tasks", purpose: "创建生成或检查任务" },
-      { method: "GET", path: "/api/tasks/{id}", purpose: "查询长任务状态" },
       { method: "POST", path: "/api/drama/projects", purpose: "创建短剧项目" },
       { method: "GET", path: "/api/drama/projects/{id}", purpose: "查询短剧项目与流水线状态" },
       { method: "POST", path: "/api/drama/projects/{id}/pipeline", purpose: "发起或续跑编排流水线" },
@@ -601,75 +585,6 @@ const seedanceConfig = {
   accessors: seedanceAccessors
 };
 
-async function generateSeedanceVideo(taskId, payload) {
-  const runDir = join(seedanceRunRoot, taskId);
-  setTask(taskId, { status: "running", progress: 5, startedAt: new Date().toISOString(), provider: "seedance2" });
-  try {
-    const result = await runSeedanceGeneration({
-      config: seedanceConfig,
-      payload,
-      runDir,
-      durationSec: 15, // 口播页固定 15 秒，与历史行为一致
-      onEvent: (event) => {
-        if (event.phase === "prepared") setTask(taskId, { progress: 16 });
-        else if (event.phase === "submitted") setTask(taskId, { progress: 35, providerTaskId: event.providerTaskId });
-        else if (event.phase === "poll") {
-          setTask(taskId, {
-            progress: Math.min(92, 42 + event.pollCount * 2),
-            providerTaskId: event.providerTaskId,
-            providerStatus: event.status
-          });
-        }
-      }
-    });
-    const fileName = `${taskId}.mp4`;
-    copyFileSync(result.videoPath, join(outputRoot, fileName));
-    setTask(taskId, {
-      status: "succeeded",
-      progress: 100,
-      finishedAt: new Date().toISOString(),
-      result: {
-        provider: "seedance2",
-        providerTaskId: result.providerTaskId,
-        providerStatus: "succeeded",
-        videoUrl: `/outputs/${fileName}`,
-        balanceBefore: result.report.balance_before?.wallet_balance ?? null,
-        balanceAfter: result.report.balance_after?.wallet_balance ?? null,
-        deductedPoints: result.report.deducted_points ?? null
-      }
-    });
-  } catch (error) {
-    // 系统级错误（ENOENT/EACCES 等）的 message 可能含本机绝对路径，落盘前脱敏
-    const errorCode = String(error.code || "");
-    const message = (!errorCode || /^E[A-Z_0-9]+$/.test(errorCode))
-      ? `本地文件系统错误（${errorCode || "UNKNOWN"}）`
-      : error.message;
-    setTask(taskId, {
-      status: "failed",
-      progress: 100,
-      finishedAt: new Date().toISOString(),
-      error: {
-        code: error.code || "SEEDANCE_GENERATION_FAILED",
-        message,
-        retryable: Boolean(error.retryable),
-        ...(error.providerTaskId ? { providerTaskId: error.providerTaskId } : {})
-      }
-    });
-  }
-}
-
-function persistTasks() {
-  const safe = [...tasks.values()].slice(-50).map(({ internal, ...task }) => task);
-  writeFileSync(tasksFile, JSON.stringify({ updatedAt: new Date().toISOString(), tasks: safe }, null, 2));
-}
-
-function setTask(id, patch) {
-  const current = tasks.get(id);
-  if (!current) return;
-  tasks.set(id, { ...current, ...patch, updatedAt: new Date().toISOString() });
-  persistTasks();
-}
-
 function allowRequest(ip) {
   const now = Date.now();
   const current = (rateWindow.get(ip) || []).filter((stamp) => now - stamp < 60_000);
@@ -677,156 +592,6 @@ function allowRequest(ip) {
   current.push(now);
   rateWindow.set(ip, current);
   return true;
-}
-
-async function generateElevenAudio(taskId, payload) {
-  try {
-    setTask(taskId, { status: "running", progress: 20, startedAt: new Date().toISOString() });
-    const response = await elevenFetch(`/v1/text-to-speech/${encodeURIComponent(payload.voiceId)}?output_format=mp3_44100_128`, {
-      method: "POST",
-      timeout: 60_000,
-      body: JSON.stringify({
-        text: payload.script,
-        model_id: payload.modelId || "eleven_multilingual_v2",
-        voice_settings: {
-          stability: payload.stability ?? 0.55,
-          similarity_boost: payload.similarity ?? 0.78,
-          style: payload.style ?? 0.18,
-          speed: payload.speed ?? 1
-        }
-      })
-    });
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length < 500) throw new Error("生成音频为空");
-    const fileName = `${taskId}.mp3`;
-    writeFileSync(join(outputRoot, fileName), bytes);
-    setTask(taskId, {
-      status: "succeeded",
-      progress: 100,
-      finishedAt: new Date().toISOString(),
-      result: { audioUrl: `/outputs/${fileName}`, bytes: bytes.length }
-    });
-  } catch (error) {
-    setTask(taskId, {
-      status: "failed",
-      progress: 100,
-      finishedAt: new Date().toISOString(),
-      error: { code: error.code || "TTS_FAILED", message: error.message, retryable: Boolean(error.retryable) }
-    });
-  }
-}
-
-async function generateVoiceboxAudio(taskId, payload, voice) {
-  try {
-    setTask(taskId, { status: "running", progress: 8, startedAt: new Date().toISOString() });
-    await ensureVoicebox();
-    setTask(taskId, { progress: 22 });
-    const requestStartedAt = Date.now();
-    const requestBody = {
-      text: payload.script,
-      profile_id: voice.profileId,
-      language: payload.language === "en" ? "en" : "zh",
-      model_size: "1.7B"
-    };
-    const serviceUrl = discoverVoiceboxServiceUrl();
-    if (!serviceUrl) throw Object.assign(new Error("未检测到本地 Voicebox 服务"), { code: "VOICEBOX_NOT_CONFIGURED" });
-    const generated = await fetch(`${serviceUrl}/generate`, {
-      method: "POST",
-      signal: AbortSignal.timeout(30_000),
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody)
-    });
-    let result = null;
-    try { result = await generated.json(); } catch {}
-
-    // Voicebox 目前会在首次加载 Qwen 模型时偶发返回 500，但任务已经成功入队。
-    // 通过本人音色、原文和创建时间找回这条任务，避免工作台误报失败。
-    let generationId = result?.id || null;
-    if (!generationId) {
-      for (let attempt = 0; attempt < 8 && !generationId; attempt += 1) {
-        if (attempt) await new Promise((resolve) => setTimeout(resolve, 500));
-        try {
-          const historyResponse = await voiceboxFetch(`/history?profile_id=${encodeURIComponent(voice.profileId)}&limit=20`, { timeout: 5000 });
-          const history = await historyResponse.json();
-          const match = (history.items || []).find((item) => {
-            const createdAt = Date.parse(item.created_at || "");
-            return item.profile_id === voice.profileId
-              && item.text === payload.script
-              && (!Number.isFinite(createdAt) || createdAt >= requestStartedAt - 15_000);
-          });
-          generationId = match?.id || null;
-        } catch {}
-      }
-    }
-    if (!generationId) {
-      const detail = typeof result?.detail === "string" ? result.detail : result?.message;
-      throw Object.assign(new Error(detail || `Voicebox 返回 ${generated.status}，且未找到生成任务`), {
-        code: `VOICEBOX_${generated.status}`,
-        retryable: generated.status >= 500
-      });
-    }
-
-    let completed = false;
-    for (let attempt = 0; attempt < 480; attempt += 1) {
-      const statusResponse = await voiceboxFetch(`/history/${encodeURIComponent(generationId)}`, { timeout: 5000 });
-      const status = await statusResponse.json();
-      if (["completed", "succeeded"].includes(status.status)) {
-        completed = true;
-        break;
-      }
-      if (["failed", "cancelled", "canceled"].includes(status.status)) {
-        throw Object.assign(new Error(status.error || "Voicebox 本地生成失败"), { code: "VOICEBOX_GENERATION_FAILED" });
-      }
-      setTask(taskId, { progress: Math.min(90, 24 + Math.floor(attempt / 7)) });
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-    }
-    if (!completed) throw Object.assign(new Error("Voicebox 生成超时"), { code: "VOICEBOX_TIMEOUT", retryable: true });
-
-    setTask(taskId, { progress: 92 });
-    const audioResponse = await voiceboxFetch(`/audio/${encodeURIComponent(generationId)}`, { timeout: 30_000 });
-    const bytes = Buffer.from(await audioResponse.arrayBuffer());
-    if (bytes.length < 500) throw new Error("Voicebox 生成音频为空");
-    const fileName = `${taskId}.wav`;
-    writeFileSync(join(outputRoot, fileName), bytes);
-    setTask(taskId, {
-      status: "succeeded",
-      progress: 100,
-      finishedAt: new Date().toISOString(),
-      result: { audioUrl: `/outputs/${fileName}`, bytes: bytes.length, provider: "voicebox", profileId: voice.profileId, generationId }
-    });
-  } catch (error) {
-    setTask(taskId, {
-      status: "failed",
-      progress: 100,
-      finishedAt: new Date().toISOString(),
-      error: { code: error.code || "VOICEBOX_TTS_FAILED", message: error.message, retryable: Boolean(error.retryable) }
-    });
-  }
-}
-
-function createTask(payload) {
-  const requestKey = payload.idempotencyKey || createHash("sha256")
-    .update(JSON.stringify({ type: payload.type, script: payload.script, voiceId: payload.voiceId, avatarId: payload.avatarId }))
-    .digest("hex");
-  const existingId = idempotency.get(requestKey);
-  if (existingId && tasks.has(existingId)) return { task: tasks.get(existingId), reused: true };
-
-  const id = randomUUID();
-  const task = {
-    id,
-    type: payload.type,
-    title: String(payload.title || "未命名口播").slice(0, 80),
-    status: "queued",
-    progress: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    result: null,
-    error: null
-  };
-  tasks.set(id, task);
-  idempotency.set(requestKey, id);
-  persistTasks();
-  return { task, reused: false };
 }
 
 async function handleApi(request, response, url) {
@@ -849,23 +614,6 @@ async function handleApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/avatars") {
     const data = loadAvatarCatalog();
     return sendJson(response, 200, envelope(true, { ...data, avatars: [...loadCustomAvatars(), ...(data.avatars || [])] }, { requestId }));
-  }
-
-  if (request.method === "POST" && url.pathname === "/api/seedance/prompt-preview") {
-    let payload;
-    try {
-      payload = await readJson(request, 40_000);
-    } catch (error) {
-      return sendJson(response, 400, envelope(false, null, { requestId, errorCode: error.message, message: "提示词预览内容无效" }));
-    }
-    const avatar = avatarById(payload.avatarId) || { name: payload.avatarName || "所选人物" };
-    const voice = [...loadLocalVoices(), ...loadCustomVoices()].find((item) => item.id === payload.voiceId)
-      || { name: payload.voiceName || "所选音色" };
-    if (!payload.script || String(payload.script).trim().length < 3) {
-      return sendJson(response, 422, envelope(false, null, { requestId, errorCode: "SCRIPT_INVALID", message: "脚本至少需要 3 个字符" }));
-    }
-    const prompt = buildSeedancePrompt(payload, avatar, voice);
-    return sendJson(response, 200, envelope(true, { prompt, model: seedanceModel, duration: 15 }, { requestId }));
   }
 
   if (request.method === "POST" && url.pathname === "/api/avatars/custom") {
@@ -964,88 +712,6 @@ async function handleApi(request, response, url) {
     }
   }
 
-  if (request.method === "GET" && url.pathname.startsWith("/api/tasks/")) {
-    const id = url.pathname.split("/").pop();
-    const task = tasks.get(id);
-    if (!task) return sendJson(response, 404, envelope(false, null, { requestId, errorCode: "TASK_NOT_FOUND", message: "任务不存在" }));
-    return sendJson(response, 200, envelope(true, task, { requestId }));
-  }
-
-  if (request.method === "POST" && url.pathname === "/api/tasks") {
-    const ip = request.socket.remoteAddress || "local";
-    if (!allowRequest(ip)) return sendJson(response, 429, envelope(false, null, { requestId, errorCode: "RATE_LIMITED", message: "操作太快，请一分钟后再试", retryable: true }));
-    let payload;
-    try {
-      payload = await readJson(request);
-    } catch (error) {
-      return sendJson(response, 400, envelope(false, null, { requestId, errorCode: error.message, message: "请求内容无效" }));
-    }
-    if (!payload.script || payload.script.length < 3 || payload.script.length > 5000) {
-      return sendJson(response, 422, envelope(false, null, { requestId, errorCode: "SCRIPT_INVALID", message: "脚本需为 3–5000 个字符" }));
-    }
-    if (payload.type === "dry_run") {
-      const { task, reused } = createTask(payload);
-      setTimeout(() => setTask(task.id, { status: "running", progress: 46, startedAt: new Date().toISOString() }), 350);
-      setTimeout(() => setTask(task.id, {
-        status: "succeeded",
-        progress: 100,
-        finishedAt: new Date().toISOString(),
-        result: { simulated: true, message: "流程检查通过，未产生 API 费用" }
-      }), 1200);
-      return sendJson(response, 202, envelope(true, { taskId: task.id, reused }, { requestId, warnings: ["这是无费用模拟任务"] }));
-    }
-    if (payload.type === "voice_preview") {
-      if (!payload.voiceId) return sendJson(response, 422, envelope(false, null, { requestId, errorCode: "VOICE_REQUIRED", message: "请选择 ElevenLabs 音色" }));
-      const localVoice = loadLocalVoices().find((voice) => voice.id === payload.voiceId);
-      if (localVoice?.provider === "voicebox" && localVoice.ttsReady) {
-        const { task, reused } = createTask(payload);
-        if (!reused) generateVoiceboxAudio(task.id, payload, localVoice);
-        return sendJson(response, 202, envelope(true, { taskId: task.id, reused }, {
-          requestId,
-          warnings: ["使用本机 Voicebox / Qwen3-TTS 生成，不消耗 ElevenLabs 额度"]
-        }));
-      }
-      if (localVoice) {
-        return sendJson(response, 422, envelope(false, null, {
-          requestId,
-          errorCode: "VOICE_SAMPLE_ONLY",
-          message: "这是本地历史样音，尚未保存进 ElevenLabs Voice Library，不能生成新配音"
-        }));
-      }
-      if (payload.confirmCost !== true) return sendJson(response, 409, envelope(false, null, { requestId, errorCode: "COST_CONFIRMATION_REQUIRED", message: "真实配音需要明确确认费用" }));
-      const { task, reused } = createTask(payload);
-      if (!reused) generateElevenAudio(task.id, payload);
-      return sendJson(response, 202, envelope(true, { taskId: task.id, reused }, { requestId }));
-    }
-    if (payload.type === "final_video") {
-      if (payload.confirmCost !== true) return sendJson(response, 409, envelope(false, null, {
-        requestId, errorCode: "COST_CONFIRMATION_REQUIRED", message: "真实视频生成需要明确确认费用"
-      }));
-      if (!payload.avatarId) return sendJson(response, 422, envelope(false, null, {
-        requestId, errorCode: "AVATAR_REQUIRED", message: "请选择人物参考图"
-      }));
-      if (!avatarById(payload.avatarId)) return sendJson(response, 422, envelope(false, null, {
-        requestId, errorCode: "AVATAR_NOT_FOUND", message: "找不到所选人物参考图"
-      }));
-      if (!payload.voiceId) return sendJson(response, 422, envelope(false, null, {
-        requestId, errorCode: "VOICE_REQUIRED", message: "请选择音色参考"
-      }));
-      const seedance = getSeedanceStatus();
-      if (!seedance.connected) return sendJson(response, 503, envelope(false, null, {
-        requestId,
-        errorCode: seedance.state === "unauthorized" ? "SEEDANCE_UNAUTHORIZED" : "SEEDANCE_UNAVAILABLE",
-        message: seedance.state === "unauthorized" ? "Seedance 2.0 账号认证已失效，请重新授权" : "Seedance 2.0 API 当前不可用"
-      }));
-      const { task, reused } = createTask(payload);
-      if (!reused) generateSeedanceVideo(task.id, payload);
-      return sendJson(response, 202, envelope(true, { taskId: task.id, reused }, {
-        requestId,
-        warnings: ["已向 Seedance 2.0 提交 1 条任务；人物图片和所选音色作为参考，不会自动付费重试"]
-      }));
-    }
-    return sendJson(response, 422, envelope(false, null, { requestId, errorCode: "TASK_TYPE_INVALID", message: "不支持的任务类型" }));
-  }
-
   if (url.pathname.startsWith("/api/drama/")) {
     return handleDramaApi(request, response, url, {
       sendJson,
@@ -1076,15 +742,6 @@ function serveStatic(response, pathname) {
     createReadStream(voice.previewPath).pipe(response);
     return true;
   }
-  if (pathname.startsWith("/outputs/")) {
-    const fileName = pathname.slice("/outputs/".length);
-    if (!/^[a-f0-9-]+\.(mp3|wav|mp4)$/i.test(fileName)) return false;
-    const outputPath = join(outputRoot, fileName);
-    if (!existsSync(outputPath)) return false;
-    response.writeHead(200, { "Cache-Control": "private, max-age=3600", "Content-Type": contentTypes[extname(outputPath)] || "application/octet-stream" });
-    createReadStream(outputPath).pipe(response);
-    return true;
-  }
   if (pathname.startsWith("/uploads/")) {
     const fileName = pathname.slice("/uploads/".length);
     if (!/^[a-f0-9-]+\.(jpg|png|webp)$/i.test(fileName)) return false;
@@ -1110,7 +767,7 @@ function serveStatic(response, pathname) {
     createReadStream(filePath).pipe(response);
     return true;
   }
-  const requestedPath = pathname === "/" ? "/index.html" : decodeURIComponent(pathname);
+  const requestedPath = pathname === "/" ? "/drama.html" : decodeURIComponent(pathname);
   const safePath = normalize(requestedPath).replace(/^(\.\.(\/|\\|$))+/, "");
   const filePath = join(publicRoot, safePath);
   if (!filePath.startsWith(publicRoot) || !existsSync(filePath) || !statSync(filePath).isFile()) return false;
@@ -1148,7 +805,7 @@ export function startServer() {
       server.off("error", reject);
       const address = server.address();
       const url = `http://${host}:${address.port}`;
-      console.log(`数字人口播工作台：${url}`);
+      console.log(`短剧工作台：${url}`);
       resolve({ server, url });
     });
   });

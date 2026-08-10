@@ -72,50 +72,6 @@ try {
   const customImage = await fetch(`http://127.0.0.1:${port}${custom.avatar.image}`);
   if (!customImage.ok || !customImage.headers.get("content-type")?.startsWith("image/png")) throw new Error("custom avatar image not served");
 
-  const promptPreview = await request("/api/seedance/prompt-preview", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      script: "这是一条透明可编辑的数字人口播提示词。",
-      avatarId: custom.avatar.id,
-      avatarName: custom.avatar.name,
-      voiceId: voices.voices[0].id,
-      voiceName: voices.voices[0].name,
-      language: "zh",
-      settings: { motion: true }
-    })
-  });
-  if (!promptPreview.prompt.includes(custom.avatar.name)) throw new Error("prompt preview missing selected avatar");
-
-  const costGateResponse = await fetch(`http://127.0.0.1:${port}/api/tasks`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      type: "final_video",
-      confirmCost: false,
-      title: "Cost gate",
-      script: "这条请求必须在提交付费任务之前被费用门禁拦截。",
-      avatarId: custom.avatar.id,
-      voiceId: voices.voices[0].id
-    })
-  });
-  const costGate = await costGateResponse.json();
-  if (costGateResponse.status !== 409 || costGate.errorCode !== "COST_CONFIRMATION_REQUIRED") throw new Error("cost gate failed");
-
-  const dryRun = await request("/api/tasks", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      type: "dry_run",
-      title: "Smoke test",
-      script: "这是一条不会产生费用的流程检查。",
-      idempotencyKey: "smoke-test-v2"
-    })
-  });
-  await wait(1500);
-  const task = await request(`/api/tasks/${dryRun.taskId}`);
-  if (task.status !== "succeeded") throw new Error(`dry run status=${task.status}`);
-
   // ---------- 短剧工作台：零费用全链路 ----------
   const dramaScript = "雨夜，林晚抱着纸箱站在便利店门口躲雨。陈默推门出来，把伞塞进她手里转身冲进雨里。林晚低头发现伞柄上贴着一张挂失回执，持卡人姓名写着陈默。她追出去两步，雨幕里已经看不到人影。";
   const created = await request("/api/drama/projects", {
@@ -196,9 +152,6 @@ try {
     demoVoices: voices.voices.length,
     integrationRequirements: integrations.integrations.length,
     customAvatarUpload: customImage.status,
-    promptPreview: promptPreview.prompt.length,
-    costGate: costGate.errorCode,
-    dryRun: task.status,
     dramaPipeline: drama.status,
     dramaCostGate: dramaGate.errorCode,
     dramaVideoGate: videoNoBindingBody.errorCode

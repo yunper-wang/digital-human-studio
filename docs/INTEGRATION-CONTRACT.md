@@ -6,11 +6,11 @@ Digital Human Studio 不内置任何个人 API Key、Token 或私人节点地址
 
 | 能力 | 供应商 | 级别 | 本机配置项 | 用途 |
 | --- | --- | --- | --- | --- |
-| 视频生成 | Seedance 2.0 | 必需 | `SEEDANCE_PYTHON`、`TOOL_VAULT_PATH`、`SEEDANCE_RUNNER` | 提交数字人口播成片任务 |
-| 云端配音 | ElevenLabs | 可选 | `ELEVENLABS_API_KEY` | 加载账号音色、生成配音试听 |
+| 视频生成 | Seedance 2.0 | 必需 | `SEEDANCE_PYTHON`、`TOOL_VAULT_PATH`、`SEEDANCE_RUNNER` | 生成短剧口播镜（数字人口播）视频 |
+| 云端配音 | ElevenLabs | 可选 | `ELEVENLABS_API_KEY` | 为口播镜提供音色参考 |
 | 火山语音大模型 | Doubao-Seed-TTS 2.0 | 可选 | `VOLCENGINE_TTS_APP_ID`、`VOLCENGINE_TTS_ACCESS_TOKEN`、`VOLCENGINE_TTS_VOICE_TYPE` | 接入豆包语音合成 2.0 公版音色 |
 | 火山声音复刻 | Doubao-Seed-ICL 2.0 | 可选 | 同上，按控制台开通的资源填写 | 使用用户自行购买的复刻音色 |
-| 本地克隆音色 | Voicebox + Qwen3-TTS | 可选、免费 | 通常自动检测；也可手动填写 `VOICEBOX_URL` | 在本机生成克隆配音 |
+| 本地克隆音色 | Voicebox + Qwen3-TTS | 可选、免费 | 通常自动检测；也可手动填写 `VOICEBOX_URL` | 为口播镜提供本地克隆音色参考 |
 | 短剧编排模型 | OpenAI 兼容端点 | 可选 | `DRAMA_LLM_BASE_URL`、`DRAMA_LLM_MODEL`、`DRAMA_LLM_API_KEY` | 驱动剧本分析/导演分镜/提示词/审核四个阶段；不配置时使用本机演示编排 |
 | 短剧首帧生成 | ComfyUI (Flux) | 可选 | `COMFYUI_URL` | 为每个分镜生成首帧；本机算力，不产生 API 费用 |
 | 剧情镜视频工作流 | ComfyUI 模板（MiniMax H3 等图生视频） | 可选 | `DRAMA_VIDEO_WORKFLOW` | 注入已确认首帧与运动提示词后提交本机 ComfyUI 生成剧情镜视频 |
@@ -37,9 +37,6 @@ Voicebox 推荐使用 Qwen3-TTS 1.7B。工作台会检查 Voicebox 应用、本�
 | `GET` | `/api/integrations` | 接入要求及脱敏后的配置/连接布尔状态 |
 | `GET` | `/api/avatars` | 数字人目录 |
 | `GET` | `/api/voices` | 音色目录 |
-| `POST` | `/api/seedance/prompt-preview` | 生成可编辑的 Seedance 提示词 |
-| `POST` | `/api/tasks` | 创建流程检查、配音或视频任务 |
-| `GET` | `/api/tasks/{id}` | 轮询长任务状态 |
 | `PATCH` | `/api/drama/projects/{id}/characters/{charId}` | 绑定角色形象与音色 |
 | `POST` | `/api/drama/projects/{id}/shots/{shotId}/confirm` | 确认分镜首帧 |
 | `POST` | `/api/drama/projects/{id}/shots/{shotId}/video` | 生成或重生成分镜视频（重生成需 confirmCost） |
@@ -49,6 +46,6 @@ Voicebox 推荐使用 Qwen3-TTS 1.7B。工作台会检查 Voicebox 应用、本�
 
 - 外部供应商调用只发生在本机 Node.js 服务端，浏览器界面不接触密钥。
 - 真实付费生成必须明确确认，失败不会自动付费重试。
-- 长任务使用 `taskId` 轮询；重复提交由幂等键保护。
+- 短剧流水线与逐镜生成采用异步执行，客户端轮询项目状态；预算闸门与逐镜 `confirmCost` 确认保护付费操作。
 - `/api/integrations` 只返回配置项名称和布尔状态，绝不返回配置值或本机路径。
 - 本地检测只返回 `appInstalled/modelDownloaded/modelLoaded/autoDetected` 布尔值，不公开本机端口或目录。
