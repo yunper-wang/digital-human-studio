@@ -566,8 +566,10 @@ function integrationContract(providers) {
       { method: "POST", path: "/api/drama/projects/{id}/pipeline", purpose: "发起或续跑编排流水线" },
       { method: "POST", path: "/api/drama/projects/{id}/gate-a", purpose: "确认短剧预算闸门" },
       { method: "POST", path: "/api/drama/projects/{id}/shots/{shotId}/frame", purpose: "生成或换抽分镜首帧" },
+      { method: "POST", path: "/api/drama/projects/{id}/shots/{shotId}/confirm", purpose: "确认分镜首帧" },
       { method: "PATCH", path: "/api/drama/projects/{id}/characters/{charId}", purpose: "绑定角色形象与音色" },
-      { method: "POST", path: "/api/drama/projects/{id}/shots/{shotId}/video", purpose: "生成或重生成分镜视频" }
+      { method: "POST", path: "/api/drama/projects/{id}/shots/{shotId}/video", purpose: "生成或重生成分镜视频" },
+      { method: "POST", path: "/api/drama/projects/{id}/shots/{shotId}/video-confirm", purpose: "确认分镜视频" }
     ]
   };
 }
@@ -637,13 +639,18 @@ async function generateSeedanceVideo(taskId, payload) {
       }
     });
   } catch (error) {
+    // 系统级错误（ENOENT/EACCES 等）的 message 可能含本机绝对路径，落盘前脱敏
+    const errorCode = String(error.code || "");
+    const message = (!errorCode || /^E[A-Z_0-9]+$/.test(errorCode))
+      ? `本地文件系统错误（${errorCode || "UNKNOWN"}）`
+      : error.message;
     setTask(taskId, {
       status: "failed",
       progress: 100,
       finishedAt: new Date().toISOString(),
       error: {
         code: error.code || "SEEDANCE_GENERATION_FAILED",
-        message: error.message,
+        message,
         retryable: Boolean(error.retryable),
         ...(error.providerTaskId ? { providerTaskId: error.providerTaskId } : {})
       }

@@ -41,7 +41,9 @@ Voicebox 推荐使用 Qwen3-TTS 1.7B。工作台会检查 Voicebox 应用、本�
 | `POST` | `/api/tasks` | 创建流程检查、配音或视频任务 |
 | `GET` | `/api/tasks/{id}` | 轮询长任务状态 |
 | `PATCH` | `/api/drama/projects/{id}/characters/{charId}` | 绑定角色形象与音色 |
+| `POST` | `/api/drama/projects/{id}/shots/{shotId}/confirm` | 确认分镜首帧 |
 | `POST` | `/api/drama/projects/{id}/shots/{shotId}/video` | 生成或重生成分镜视频（重生成需 confirmCost） |
+| `POST` | `/api/drama/projects/{id}/shots/{shotId}/video-confirm` | 确认分镜视频 |
 
 ## 对接约定
 

@@ -227,7 +227,7 @@ async function saveCharacter(project, charId, patch) {
     });
     state.project = data.project;
     renderProject();
-    toast("角色绑定已更新", "相关口播镜的旧成片已作废");
+    toast("角色绑定已更新");
   } catch (error) {
     toast("绑定失败", error.message, "error");
     renderProject(); // 回退选择框显示

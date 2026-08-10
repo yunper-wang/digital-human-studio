@@ -26,7 +26,9 @@ const child = spawn(process.execPath, ["server.mjs"], {
     DRAMA_LLM_MODEL: "",
     DRAMA_LLM_API_KEY: "",
     DRAMA_LLM_MOCK: "",
-    COMFYUI_URL: ""
+    COMFYUI_URL: "",
+    DRAMA_VIDEO_WORKFLOW: "",
+    COMFYUI_VIDEO_TIMEOUT_MS: ""
   },
   stdio: ["ignore", "pipe", "pipe"]
 });

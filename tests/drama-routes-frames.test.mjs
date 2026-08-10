@@ -5,10 +5,10 @@ import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDramaStore } from "../lib/drama/store.mjs";
-import { createDramaProject, normalizeShot, DEMO_DRAMA_SCRIPT } from "../lib/drama/schema.mjs";
+import { createDramaProject, normalizeShot, normalizeClip, DEMO_DRAMA_SCRIPT } from "../lib/drama/schema.mjs";
 import { getDramaLlmConfig } from "../lib/drama/llm.mjs";
 import { runDramaPipeline } from "../lib/drama/pipeline.mjs";
-import { generateShotFrame } from "../lib/drama/routes.mjs";
+import { generateShotFrame, handleDramaApi } from "../lib/drama/routes.mjs";
 import { getComfyuiConfig } from "../lib/drama/comfyui.mjs";
 import { getDramaPricing } from "../lib/drama/budget.mjs";
 
@@ -71,6 +71,52 @@ test("首帧生成失败记录错误且不自动重试", async () => {
     const frame = store.get(project.id).shots[0].frame;
     assert.equal(frame.status, "failed");
     assert.equal(frame.error.code, "COMFYUI_SUBMIT_FAILED");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("clips_ready 项目重抽/确认首帧不回退到首帧阶段状态", async () => {
+  const root = mkdtempSync(join(tmpdir(), "drama-frames-guard-"));
+  try {
+    const { store, project } = await fixtureProject(root);
+    // 模拟项目已走完视频阶段：首帧全部确认、成片全部确认
+    store.update(project.id, (p) => {
+      for (const shot of p.shots) {
+        shot.frame = { ...shot.frame, status: "confirmed" };
+        shot.clip = { ...normalizeClip(shot.clip), status: "confirmed" };
+      }
+      p.status = "clips_ready";
+    });
+    const shotId = project.shots[0].id;
+    const ctx = {
+      store,
+      comfyConfig: { ...getComfyuiConfig({ COMFYUI_URL: "http://127.0.0.1:8188" }), pollIntervalMs: 1 },
+      frameFetch: fakeComfyFetch("guard"),
+      frameSleep: async () => {}
+    };
+    await generateShotFrame(ctx, project.id, shotId, 888);
+    const afterReroll = store.get(project.id);
+    assert.equal(afterReroll.shots[0].frame.status, "ready");
+    // 重抽首帧成功不得把 clips_ready 回退为 awaiting_gate_b / frames_confirmed
+    assert.equal(afterReroll.status, "clips_ready");
+
+    // 首帧确认路由同样受守卫保护（重抽后确认回首帧，状态仍不得回退）
+    const envelope = (ok, data, meta = {}) => ({ ok, data, ...meta });
+    let captured = null;
+    const routeCtx = {
+      store,
+      envelope,
+      sendJson: (response, status, body) => { captured = { status, body }; return true; },
+      readJson: async () => ({}),
+      allowRequest: () => true
+    };
+    const url = new URL(`http://local/api/drama/projects/${project.id}/shots/${shotId}/confirm`);
+    await handleDramaApi({ method: "POST", socket: { remoteAddress: "test" } }, {}, url, routeCtx);
+    assert.equal(captured.status, 200);
+    const afterConfirm = store.get(project.id);
+    assert.equal(afterConfirm.shots[0].frame.status, "confirmed");
+    assert.equal(afterConfirm.status, "clips_ready");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
