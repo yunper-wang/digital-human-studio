@@ -24,3 +24,6 @@ data/seedance-runs/*
 !data/seedance-runs/.gitkeep
 data/drama-projects/*
 !data/drama-projects/.gitkeep
+
+# Superpowers brainstorm/workflow artifacts
+.superpowers/
