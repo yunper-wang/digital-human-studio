@@ -13,6 +13,7 @@ Digital Human Studio 不内置任何个人 API Key、Token 或私人节点地址
 | 本地克隆音色 | Voicebox + Qwen3-TTS | 可选、免费 | 通常自动检测；也可手动填写 `VOICEBOX_URL` | 在本机生成克隆配音 |
 | 短剧编排模型 | OpenAI 兼容端点 | 可选 | `DRAMA_LLM_BASE_URL`、`DRAMA_LLM_MODEL`、`DRAMA_LLM_API_KEY` | 驱动剧本分析/导演分镜/提示词/审核四个阶段；不配置时使用本机演示编排 |
 | 短剧首帧生成 | ComfyUI (Flux) | 可选 | `COMFYUI_URL` | 为每个分镜生成首帧；本机算力，不产生 API 费用 |
+| 剧情镜视频工作流 | ComfyUI 模板（MiniMax H3 等图生视频） | 可选 | `DRAMA_VIDEO_WORKFLOW` | 注入已确认首帧与运动提示词后提交本机 ComfyUI 生成剧情镜视频 |
 
 `SEEDANCE_MODEL` 是可选的视频模型标识。配置项只写入用户自己的 `.env` 或桌面应用数据目录，不应写进源码、截图、日志或 GitHub。
 
@@ -39,6 +40,8 @@ Voicebox 推荐使用 Qwen3-TTS 1.7B。工作台会检查 Voicebox 应用、本�
 | `POST` | `/api/seedance/prompt-preview` | 生成可编辑的 Seedance 提示词 |
 | `POST` | `/api/tasks` | 创建流程检查、配音或视频任务 |
 | `GET` | `/api/tasks/{id}` | 轮询长任务状态 |
+| `PATCH` | `/api/drama/projects/{id}/characters/{charId}` | 绑定角色形象与音色 |
+| `POST` | `/api/drama/projects/{id}/shots/{shotId}/video` | 生成或重生成分镜视频（重生成需 confirmCost） |
 
 ## 对接约定
 

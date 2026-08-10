@@ -162,6 +162,30 @@ try {
   const dramaJson = JSON.stringify(drama);
   if (/\/Users\/|\/home\/|api[_-]?key["']?\s*[:=]\s*["'][^"']+/i.test(dramaJson)) throw new Error("drama api exposed a path or secret value");
 
+  // 角色绑定：未绑定口播镜生成视频 → 422；绑定后音色不存在 → 422
+  const dialogueShot = drama.shots.find((shot) => shot.shotType === "dialogue") || drama.shots[0];
+  const videoNoBinding = await fetch(`http://127.0.0.1:${port}/api/drama/projects/${created.project.id}/shots/${dialogueShot.id}/video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}"
+  });
+  const videoNoBindingBody = await videoNoBinding.json();
+  if (![422, 503].includes(videoNoBinding.status)) throw new Error(`unexpected video gate status ${videoNoBinding.status}`);
+  // mock 分镜首镜为 cinematic：frame 未确认时应 409；口播镜未绑定时应 422
+  if (dialogueShot.shotType === "dialogue" && videoNoBindingBody.errorCode !== "CHARACTER_BINDING_REQUIRED") {
+    throw new Error("dialogue video should require character binding");
+  }
+  if (dialogueShot.shotType !== "dialogue" && videoNoBindingBody.errorCode !== "FRAME_NOT_CONFIRMED") {
+    throw new Error("cinematic video should require confirmed frame");
+  }
+
+  const bindBad = await fetch(`http://127.0.0.1:${port}/api/drama/projects/${created.project.id}/characters/char-1`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ voiceId: "voice-does-not-exist" })
+  });
+  if (bindBad.status !== 422 || (await bindBad.json()).errorCode !== "VOICE_NOT_FOUND") throw new Error("character binding validation failed");
+
   console.log(JSON.stringify({
     ok: true,
     service: health.service,
@@ -174,7 +198,8 @@ try {
     costGate: costGate.errorCode,
     dryRun: task.status,
     dramaPipeline: drama.status,
-    dramaCostGate: dramaGate.errorCode
+    dramaCostGate: dramaGate.errorCode,
+    dramaVideoGate: videoNoBindingBody.errorCode
   }, null, 2));
 } finally {
   child.kill("SIGTERM");

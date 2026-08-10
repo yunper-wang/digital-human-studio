@@ -10,6 +10,7 @@ assets/icon.iconset/
 # Private provider catalogs and local node configuration
 config/avatars.json
 config/local-voices.json
+config/drama-video-workflow.json
 
 # Personal media, task history and generated output
 data/custom-avatars.json
