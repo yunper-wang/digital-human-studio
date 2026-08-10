@@ -1175,7 +1175,7 @@ git commit -m "feat: 生成视图合成导出面板骨架（M5）"
 
 **Interfaces:**
 - Consumes: 既有 `api/toast/showError/schedulePoll/setView/renderBudget/renderGateB`、Task 6/7 端点、`state.project`
-- Produces: 重写 `renderGenerate(project)`；新增动作 `loadFfmpegStatus()`、`startCompose()`、`renderCompose(project)`、`renderSubtitleEditor(project)`、`uploadBgm(file)`、`clearBgm()`、`generateVoice(shotId)`、`generateAllVoices()`；初始化/事件绑定接线
+- Produces: 重写 `renderGenerate(project)`；新增动作 `loadFfmpegStatus()`、`startCompose()`、`renderCompose(project)`、`renderSubtitleEditor(project)`、`renderBgm(project)`、`uploadBgm(file)`、`generateVoice(shotId)`、`generateAllVoices()`；初始化/事件绑定接线
 
 - [ ] **Step 1: 重写 renderGenerate 并新增渲染函数**
 
@@ -1311,19 +1311,9 @@ async function uploadBgm(file) {
     toast("背景音乐已设置", "合成时将混入并闪避到台词下");
   } catch (error) { showError(error); }
 }
-
-async function clearBgm() {
-  if (!state.project) return;
-  try {
-    const { data } = await api(`/api/drama/projects/${state.project.id}/bgm`, { method: "POST", body: JSON.stringify({ audioData: "", name: "" }) }).catch(() => ({ data: null }));
-    // 服务端不接受空音频：改用下方 removeBgm
-  } catch {}
-}
 ```
 
-说明：`clearBgm` 需要服务端支持移除。简化为前端只允许「更换」BGM；移除通过上传新文件覆盖即可。删除 `clearBgm` 与 `#bgmClear` 的移除逻辑，改为点击重新选择覆盖（`#bgmClear` 按钮在 Task 8 已加 hidden，本任务不实现移除，保持 hidden）。
-
-修正：删除上面的 `clearBgm`，`#bgmClear` 保持隐藏不接线（M5 不支持移除，仅覆盖）。
+说明：M5 的 BGM 不支持「移除」，仅支持重新选择覆盖；`#bgmClear` 按钮在 Task 8 已加 `hidden`，本任务保持隐藏、不接线。
 
 - [ ] **Step 3: 事件绑定与初始化接线**
 
