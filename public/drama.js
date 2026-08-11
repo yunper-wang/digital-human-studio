@@ -5,6 +5,9 @@ const state = {
   project: null,
   projects: [],
   series: [],
+  seriesFilter: "",      // 剧集筛选："" 显示全部项目
+  assetView: "project",  // 资产视图数据源：project | shared
+  sharedLibrary: null,   // 共享资产库缓存 { seriesId, characters, scenes, props }
   avatars: [],
   voices: [],
   pollTimer: null,
@@ -93,23 +96,34 @@ function setProvider(node, mode, label) {
 async function loadProjects(selectId) {
   const { data } = await api("/api/drama/projects");
   state.projects = data.projects;
+  renderProjectSelect();
+  const target = selectId || localStorage.getItem("dramaCurrentProjectId") || "";
+  if (target && state.projects.some((p) => p.id === target)) {
+    const select = $("#projectSelect");
+    if ([...select.options].some((o) => o.value === target)) select.value = target;
+    await loadProject(target);
+  }
+}
+
+// 按 state.seriesFilter 收窄项目下拉（「未分组」显示全部）；当前项目不在结果中仅收窄列表、不强制切换
+function renderProjectSelect() {
   const select = $("#projectSelect");
+  const series = (state.series || []).find((s) => s.id === state.seriesFilter);
+  const allowed = series ? new Set(series.projectIds || []) : null;
+  const items = allowed ? state.projects.filter((p) => allowed.has(p.id)) : state.projects;
+  const keep = select.value;
   select.innerHTML = "";
   const placeholder = document.createElement("option");
   placeholder.value = "";
-  placeholder.textContent = state.projects.length ? "选择项目…" : "暂无项目";
+  placeholder.textContent = items.length ? "选择项目…" : (state.seriesFilter ? "该剧集暂无项目" : "暂无项目");
   select.append(placeholder);
-  for (const item of state.projects) {
+  for (const item of items) {
     const option = document.createElement("option");
     option.value = item.id;
     option.textContent = `${item.title}（${STATUS_LABEL[item.status] || item.status}）`;
     select.append(option);
   }
-  const target = selectId || localStorage.getItem("dramaCurrentProjectId") || "";
-  if (target && state.projects.some((p) => p.id === target)) {
-    select.value = target;
-    await loadProject(target);
-  }
+  if (keep && items.some((p) => p.id === keep)) select.value = keep;
 }
 
 async function loadProject(id) {
@@ -140,6 +154,12 @@ async function createProject() {
 async function loadSeries() {
   try { const { data } = await api("/api/drama/series"); state.series = data.series || []; } catch { state.series = []; }
   renderSeriesSelect();
+  renderProjectSelect();
+}
+
+// 当前项目的剧集归属：优先 state.series 成员关系（服务端权威），回退 project.seriesId
+function currentSeriesId() {
+  return (state.series || []).find((s) => (s.projectIds || []).includes(state.project?.id))?.id || state.project?.seriesId || "";
 }
 function renderSeriesSelect() {
   const sel = $("#seriesSelect");
@@ -148,8 +168,7 @@ function renderSeriesSelect() {
   for (const s of state.series || []) {
     const o = document.createElement("option"); o.value = s.id; o.textContent = `${s.title}（${s.projectIds.length}集）`; sel.append(o);
   }
-  const cur = state.project?.seriesId || "";
-  sel.value = cur;
+  sel.value = currentSeriesId();
   $("#assignSeriesBtn")?.classList.toggle("hidden", !state.project);
 }
 async function createSeries() {
@@ -167,6 +186,7 @@ async function assignToSeries() {
   // 同步当前项目资产到剧集共享库
   const a = state.project.analysis || {};
   await api(`/api/drama/series/${sid}/assets`, { method: "PUT", body: JSON.stringify({ characters: a.characters || [], scenes: a.scenes || [], props: a.props || [] }) }).catch(() => {});
+  state.sharedLibrary = null; // 共享库已变更，下次查看重新拉取
   state.project.seriesId = sid;
   await loadSeries();
   toast("已归入剧集", "资产已同步到共享库");
@@ -237,9 +257,8 @@ function renderProject() {
   renderProjHead(project);
   renderStepper();
   renderStages(project);
-  renderCharacters(project);
-  renderSceneAssets(project);
-  renderPropAssets(project);
+  renderSeriesSelect();
+  renderAssetView(project);
   renderStory(project);
   renderBudget(project);
   renderGateB(project);
@@ -269,12 +288,12 @@ function renderStages(project) {
   }
 }
 
-function renderCharacters(project) {
+function renderCharacters(project, analysis, readOnly = false) {
   const box = $("#characterList");
   box.innerHTML = "";
-  const characters = project.analysis?.characters || [];
+  const characters = (analysis || project?.analysis)?.characters || [];
   if (!characters.length) {
-    box.innerHTML = '<p class="muted">解析后生成</p>';
+    box.innerHTML = readOnly ? '<p class="muted">共享库暂无角色</p>' : '<p class="muted">解析后生成</p>';
     return;
   }
   for (const character of characters) {
@@ -302,6 +321,7 @@ function renderCharacters(project) {
       avatarSelect.append(option);
     }
     avatarSelect.value = character.avatarId || "";
+    avatarSelect.disabled = readOnly; // 共享库为只读视图
     avatarSelect.addEventListener("change", () => saveCharacter(project, character.id, { avatarId: avatarSelect.value || null }));
     avatarRow.append(avatarSelect);
 
@@ -320,6 +340,7 @@ function renderCharacters(project) {
       voiceSelect.append(option);
     }
     voiceSelect.value = character.voiceId || "";
+    voiceSelect.disabled = readOnly;
     voiceSelect.addEventListener("change", () => saveCharacter(project, character.id, { voiceId: voiceSelect.value || null }));
     voiceRow.append(voiceSelect);
 
@@ -328,12 +349,12 @@ function renderCharacters(project) {
   }
 }
 
-function renderSceneAssets(project) {
+function renderSceneAssets(project, analysis) {
   const box = $("#sceneList");
   if (!box) return;
   box.innerHTML = "";
-  const scenes = project?.analysis?.scenes || [];
-  if (!scenes.length) { box.innerHTML = '<p class="muted">解析后生成</p>'; return; }
+  const scenes = (analysis || project?.analysis)?.scenes || [];
+  if (!scenes.length) { box.innerHTML = analysis ? '<p class="muted">共享库暂无场景</p>' : '<p class="muted">解析后生成</p>'; return; }
   for (const s of scenes) {
     const item = document.createElement("div");
     item.className = "vz-char";
@@ -345,12 +366,12 @@ function renderSceneAssets(project) {
   }
 }
 
-function renderPropAssets(project) {
+function renderPropAssets(project, analysis) {
   const box = $("#propList");
   if (!box) return;
   box.innerHTML = "";
-  const props = project?.analysis?.props || [];
-  if (!props.length) { box.innerHTML = '<p class="muted">解析后生成</p>'; return; }
+  const props = (analysis || project?.analysis)?.props || [];
+  if (!props.length) { box.innerHTML = analysis ? '<p class="muted">共享库暂无道具</p>' : '<p class="muted">解析后生成</p>'; return; }
   for (const p of props) {
     const item = document.createElement("div");
     item.className = "vz-char";
@@ -359,6 +380,47 @@ function renderPropAssets(project) {
     item.append(name, app);
     box.append(item);
   }
+}
+
+// 资产范围切换控件状态：仅当前项目已归入剧集时共享库可选
+function renderAssetScope() {
+  const seg = $("#assetScopeSeg");
+  if (!seg) return;
+  const hasSeries = Boolean(state.project && currentSeriesId());
+  if (!hasSeries) state.assetView = "project";
+  seg.querySelector('[data-scope="project"]').classList.toggle("on", state.assetView !== "shared");
+  const sharedBtn = seg.querySelector('[data-scope="shared"]');
+  sharedBtn.classList.toggle("on", state.assetView === "shared");
+  sharedBtn.disabled = !hasSeries;
+  const hint = $("#assetScopeHint");
+  if (hint) hint.textContent = hasSeries ? (state.assetView === "shared" ? "共享库为只读视图" : "") : "归入剧集后可查看共享资产库";
+}
+
+// 资产视图渲染：assetView=shared 时拉取剧集共享资产库（只读），否则用 project.analysis
+async function renderAssetView(project) {
+  renderAssetScope();
+  let analysis = null;
+  let readOnly = false;
+  if (state.assetView === "shared" && project) {
+    const sid = currentSeriesId();
+    if (!sid) {
+      state.assetView = "project";
+      renderAssetScope();
+    } else {
+      if (state.sharedLibrary?.seriesId !== sid) {
+        try {
+          const { data } = await api(`/api/drama/series/${sid}`);
+          state.sharedLibrary = { seriesId: sid, ...(data.series.assetLibrary || {}) };
+        } catch { state.sharedLibrary = { seriesId: sid, characters: [], scenes: [], props: [] }; }
+        if (state.project?.id !== project.id || state.assetView !== "shared") return; // 等待期间已切换项目/视图，丢弃
+      }
+      analysis = state.sharedLibrary;
+      readOnly = true;
+    }
+  }
+  renderCharacters(project, analysis, readOnly);
+  renderSceneAssets(project, analysis);
+  renderPropAssets(project, analysis);
 }
 
 async function saveCharacter(project, charId, patch) {
@@ -752,8 +814,10 @@ $("#projectSelect").addEventListener("change", (event) => {
 $("#newProjectBtn").addEventListener("click", () => {
   state.project = null;
   state.selectedShotId = null;
+  state.assetView = "project";
   localStorage.removeItem("dramaCurrentProjectId");
   $("#projectSelect").value = "";
+  renderAssetScope();
   $("#dramaTitle").value = "";
   $("#dramaScript").value = "";
   $("#dramaCharCount").textContent = "0 字";
@@ -771,6 +835,14 @@ $("#newProjectBtn").addEventListener("click", () => {
 });
 if ($("#newSeriesBtn")) $("#newSeriesBtn").addEventListener("click", createSeries);
 if ($("#assignSeriesBtn")) $("#assignSeriesBtn").addEventListener("click", assignToSeries);
+if ($("#seriesSelect")) $("#seriesSelect").addEventListener("change", (event) => {
+  state.seriesFilter = event.target.value;
+  renderProjectSelect();
+});
+$$("#assetScopeSeg [data-scope]").forEach((b) => b.addEventListener("click", () => {
+  state.assetView = b.dataset.scope;
+  if (state.project) renderAssetView(state.project);
+}));
 $("#demoBtn").addEventListener("click", async () => {
   const { data } = await api("/api/drama/demo");
   $("#dramaScript").value = data.script;

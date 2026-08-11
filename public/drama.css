@@ -94,6 +94,7 @@ body.drama-body .muted { color:var(--muted); font-size:12px; }
 .vz-seg { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
 .vz-seg button { text-align:center; font-size:11px; padding:7px 0; border:1px solid var(--border); border-radius:8px; color:#8a93a0; background:#fff; }
 .vz-seg button.on { color:#fff; background:var(--primary); border-color:var(--primary); font-weight:600; }
+.vz-seg button:disabled { opacity:.45; cursor:not-allowed; }
 .vz-apply { width:100%; margin-top:14px; background:var(--primary); color:#fff; border:0; border-radius:10px; padding:11px; font-size:12px; font-weight:700; }
 .vz-hint { font-size:10px; color:var(--muted); text-align:center; margin-top:7px; }
 /* 角色卡 / 预算 */

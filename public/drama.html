@@ -60,6 +60,16 @@
 
         <!-- 资产视图 -->
         <section class="vz-view hidden" id="viewAssets">
+          <div class="vz-card" style="padding:14px">
+            <div class="vz-rowline">
+              <b style="font-size:13px">资产范围</b>
+              <div class="vz-seg" id="assetScopeSeg" style="width:200px">
+                <button data-scope="project" class="on">本项目</button>
+                <button data-scope="shared" disabled>共享资产库</button>
+              </div>
+              <span class="muted" id="assetScopeHint">归入剧集后可查看共享资产库</span>
+            </div>
+          </div>
           <div class="vz-card" style="padding:14px"><b style="font-size:13px">角色资产卡</b><div id="characterList"></div></div>
           <div class="vz-card" style="padding:14px">
             <b style="font-size:13px">场景资产</b>
