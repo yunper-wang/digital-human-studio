@@ -170,6 +170,14 @@ try {
   }
   if (JSON.stringify(ffProbe).match(/\/Users\/|\/home\//)) throw new Error("compose/ffmpeg 暴露了本机路径");
 
+  // ---------- M6：剧集 + 版本守卫 ----------
+  const seriesRes = await request("/api/drama/series", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "烟雾剧集" }) });
+  if (!seriesRes.series?.id) throw new Error("创建剧集失败");
+  const verRes = await request(`/api/drama/projects/${created.project.id}/versions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "烟雾版本" }) });
+  if (!verRes.snapshot?.id) throw new Error("存版本失败");
+  const verList = await request(`/api/drama/projects/${created.project.id}/versions`);
+  if (!verList.versions.some((v) => v.id === verRes.snapshot.id)) throw new Error("版本列表未含新版本");
+
   console.log(JSON.stringify({
     ok: true,
     service: health.service,
@@ -182,7 +190,9 @@ try {
     dramaCostGate: dramaGate.errorCode,
     dramaShotEditGuard: `${patchedShot.audioMode}/${patchedShot.continuity}`,
     dramaVideoGate: videoNoBindingBody.errorCode,
-    composeGuard: composeBody.errorCode
+    composeGuard: composeBody.errorCode,
+    seriesGuard: seriesRes.series.id,
+    versionGuard: verRes.snapshot.id
   }, null, 2));
 } finally {
   child.kill("SIGTERM");
