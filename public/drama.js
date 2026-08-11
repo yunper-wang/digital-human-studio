@@ -208,6 +208,7 @@ function renderProject() {
   renderCompose(project);
   renderSubtitleEditor(project);
   renderBgm(project);
+  renderVersions(project);
   $("#resumeBtn").classList.toggle("hidden", project.status !== "failed");
   $("#genAllFramesBtn").classList.toggle("hidden", !project.gateAConfirmedAt || !project.shots.some((s) => ["pending", "failed"].includes(s.frame.status)));
   if (project.status === "failed" && project.pipeline?.error) {
@@ -829,6 +830,47 @@ function renderBgm(project) {
   if (volVal) volVal.textContent = `${pct}%`;
 }
 
+async function renderVersions(project) {
+  const box = $("#versionList");
+  if (!box) return;
+  box.innerHTML = "";
+  if (!project) { box.innerHTML = '<p class="muted">—</p>'; return; }
+  let versions = [];
+  try { const { data } = await api(`/api/drama/projects/${project.id}/versions`); versions = data.versions || []; } catch {}
+  if (!versions.length) { box.innerHTML = '<p class="muted">还没有版本</p>'; return; }
+  for (const v of versions) {
+    const row = document.createElement("div");
+    row.className = "vz-sub-row";
+    const label = document.createElement("span"); label.style.flex = "1"; label.textContent = `${v.name} · ${v.shotCount}镜`;
+    const rb = document.createElement("button"); rb.className = "vz-btn"; rb.textContent = "回滚";
+    rb.addEventListener("click", () => rollbackToVersion(v.id, v.name));
+    row.append(label, rb);
+    box.appendChild(row);
+  }
+}
+
+async function saveCurrentVersion() {
+  if (!state.project) return;
+  const name = window.prompt("版本名称", `版本 ${new Date().toLocaleString("zh-CN")}`);
+  if (name === null) return;
+  try {
+    await api(`/api/drama/projects/${state.project.id}/versions`, { method: "POST", body: JSON.stringify({ name }) });
+    toast("已保存版本", name);
+    renderVersions(state.project);
+  } catch (error) { showError(error.message || error); }
+}
+
+async function rollbackToVersion(versionId, name) {
+  if (!state.project) return;
+  if (!window.confirm(`回滚到「${name}」？\n将恢复剧本/分镜/分析到该版本，首帧/视频/合成需重新生成。`)) return;
+  try {
+    const { data } = await api(`/api/drama/projects/${state.project.id}/versions/${versionId}/rollback`, { method: "POST", body: "{}" });
+    state.project = data.project;
+    renderProject();
+    toast("已回滚", name);
+  } catch (error) { showError(error.message || error); }
+}
+
 async function startCompose() {
   if (!state.project) return;
   try {
@@ -881,3 +923,4 @@ if ($("#composeBtn")) $("#composeBtn").addEventListener("click", startCompose);
 if ($("#bgmPick")) $("#bgmPick").addEventListener("click", () => $("#bgmFile").click());
 if ($("#bgmFile")) $("#bgmFile").addEventListener("change", (e) => { const f = e.target.files?.[0]; if (f) uploadBgm(f); e.target.value = ""; });
 if ($("#bgmVolume")) $("#bgmVolume").addEventListener("change", (e) => { const el = $("#bgmVolumeVal"); if (el) el.textContent = `${e.target.value}%`; if (state.project?.bgm) toast("音量将在下次合成时生效", "重新合成以应用"); });
+if ($("#saveVersionBtn")) $("#saveVersionBtn").addEventListener("click", saveCurrentVersion);
