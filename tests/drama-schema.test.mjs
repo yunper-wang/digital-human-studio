@@ -202,3 +202,19 @@ test("M7：project.promptTemplateId 归一化", () => {
   assert.equal(normalizeProject({ id: "drama-1", title: "t", script: "s", ratio: "portrait" }).promptTemplateId, null);
   assert.equal(createDramaProject({ title: "t", script: "剧本" }).promptTemplateId, null);
 });
+
+test("M7：场景/道具 refMaterialId、角色 refAudioMaterialId 归一化", () => {
+  const a = normalizeAnalysis({
+    synopsis: "s", genre: "g",
+    characters: [{ id: "char-1", name: "林晚", appearance: "y", refAudioMaterialId: "mat-1" }],
+    scenes: [{ id: "scene-1", name: "n", refMaterialId: "mat-2" }],
+    props: [{ id: "prop-1", name: "伞", refMaterialId: "mat-3" }]
+  });
+  assert.equal(a.characters[0].refAudioMaterialId, "mat-1");
+  assert.equal(a.scenes[0].refMaterialId, "mat-2");
+  assert.equal(a.props[0].refMaterialId, "mat-3");
+  const a2 = normalizeAnalysis({ synopsis: "s", genre: "g", characters: [{ id: "c", name: "x", appearance: "y" }], scenes: [{ id: "s1", name: "n" }] });
+  assert.equal(a2.characters[0].refAudioMaterialId, null);
+  assert.equal(a2.scenes[0].refMaterialId, null);
+  assert.equal(a2.props.length, 0);
+});
