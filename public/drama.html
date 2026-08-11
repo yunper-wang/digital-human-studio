@@ -14,6 +14,7 @@
       <button class="vz-ic" data-view="assets" title="资产">◉</button>
       <button class="vz-ic" data-view="story" title="分镜">▦</button>
       <button class="vz-ic" data-view="generate" title="生成">▶</button>
+      <button class="vz-ic" data-view="platform" title="平台">⚙</button>
     </aside>
 
     <div class="vz-main">
@@ -55,6 +56,10 @@
               <li data-stage="review">文本审核 <em class="muted"></em></li>
             </ol>
             <button class="vz-btn hidden" id="resumeBtn" style="margin-top:10px">从失败阶段续跑</button>
+            <div class="vz-rowline" style="margin-top:10px">
+              <span class="muted">提示词模板</span>
+              <select id="promptTemplateSelect" class="vz-select" style="max-width:220px"></select>
+            </div>
           </div>
         </section>
 
@@ -147,6 +152,29 @@
             <div class="vz-banner hidden" id="doneBanner" style="margin-top:10px"></div>
             <button class="vz-btn hidden" id="genAllFramesBtn" style="margin-top:10px">生成全部首帧</button>
           </div>
+        </section>
+
+        <!-- 平台视图 -->
+        <section class="vz-view hidden" id="viewPlatform">
+          <div class="vz-card" style="padding:14px">
+            <div class="vz-seg" id="platformTabSeg" style="width:280px">
+              <button data-tab="prompts" class="on">提示词</button>
+              <button data-tab="materials">素材</button>
+              <button data-tab="models">模型</button>
+            </div>
+          </div>
+          <div id="platformPrompts">
+            <div class="vz-card" style="padding:14px">
+              <div class="vz-rowline">
+                <b style="font-size:13px">提示词模板</b>
+                <button class="vz-btn" id="newTemplateBtn">新建模板</button>
+              </div>
+              <div id="templateList" style="margin-top:8px"></div>
+            </div>
+            <div class="vz-card" style="padding:14px" id="templateEditor"></div>
+          </div>
+          <div id="platformMaterials" class="hidden"><div class="vz-card" style="padding:14px"><p class="muted">素材库（即将上线）</p></div></div>
+          <div id="platformModels" class="hidden"><div class="vz-card" style="padding:14px"><p class="muted">模型状态（即将上线）</p></div></div>
         </section>
       </div>
     </div>

@@ -11,10 +11,13 @@ const state = {
   avatars: [],
   voices: [],
   pollTimer: null,
-  view: "script",          // script | assets | story | generate
+  view: "script",          // script | assets | story | generate | platform
   selectedShotId: null,
   ffmpegAvailable: null,   // null=未探测
-  showSubs: true           // 预览字幕开关
+  showSubs: true,           // 预览字幕开关
+  platformTab: "prompts",  // 平台视图当前 tab：prompts | materials | models
+  promptTemplates: [],     // 提示词模板列表缓存
+  activeTemplateId: null   // 平台视图选中的模板 id
 };
 
 const RUNNING_STATUSES = ["analyzing", "directing", "prompting", "reviewing"];
@@ -26,7 +29,7 @@ const STATUS_LABEL = {
   videos: "视频生成中", clips_ready: "全部视频已确认",
 };
 
-const VIEWS = ["script", "assets", "story", "generate"];
+const VIEWS = ["script", "assets", "story", "generate", "platform"];
 const STEPPER = [
   { key: "script", no: "01", label: "剧本" },
   { key: "assets", no: "03", label: "视觉资产" },
@@ -202,6 +205,8 @@ function setView(name) {
   $("#viewAssets").classList.toggle("hidden", name !== "assets");
   $("#viewStory").classList.toggle("hidden", name !== "story");
   $("#viewGenerate").classList.toggle("hidden", name !== "generate");
+  $("#viewPlatform").classList.toggle("hidden", name !== "platform");
+  if (name === "platform") setPlatformTab(state.platformTab);
   if (name === "generate" && state.project && state.ffmpegAvailable === null) {
     loadFfmpegStatus().then(() => { if (state.view === "generate") renderCompose(state.project); });
   }
@@ -266,6 +271,7 @@ function renderProject() {
   renderSubtitleEditor(project);
   renderBgm(project);
   renderVersions(project);
+  renderTemplateSelect();
   $("#resumeBtn").classList.toggle("hidden", project.status !== "failed");
   $("#genAllFramesBtn").classList.toggle("hidden", !project.gateAConfirmedAt || !project.shots.some((s) => ["pending", "failed"].includes(s.frame.status)));
   if (project.status === "failed" && project.pipeline?.error) {
@@ -867,6 +873,12 @@ loadHealth();
 loadCatalogs();
 loadProjects().catch(() => toast("项目列表加载失败", "请检查本地服务", "error"));
 loadSeries();
+loadPromptTemplates();
+
+// ---------- 平台视图事件绑定 ----------
+$$("#platformTabSeg [data-tab]").forEach((b) => b.addEventListener("click", () => setPlatformTab(b.dataset.tab)));
+if ($("#newTemplateBtn")) $("#newTemplateBtn").addEventListener("click", createTemplate);
+if ($("#promptTemplateSelect")) $("#promptTemplateSelect").addEventListener("change", changeProjectTemplate);
 
 // ---------- M5 合成导出 ----------
 async function loadFfmpegStatus() {
@@ -960,6 +972,144 @@ async function renderVersions(project) {
     row.append(label, rb);
     box.appendChild(row);
   }
+}
+
+// ---------- 平台视图 ----------
+const TEMPLATE_STAGE_LABELS = { analyze: "剧本分析", direct: "导演分镜", prompt: "提示词", review: "文本审核" };
+
+function setPlatformTab(tab) {
+  state.platformTab = tab;
+  $$("#platformTabSeg [data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+  $("#platformPrompts").classList.toggle("hidden", tab !== "prompts");
+  $("#platformMaterials").classList.toggle("hidden", tab !== "materials");
+  $("#platformModels").classList.toggle("hidden", tab !== "models");
+  if (tab === "prompts") loadPromptTemplates();
+}
+
+async function loadPromptTemplates() {
+  try {
+    const { data } = await api("/api/drama/prompt-templates");
+    state.promptTemplates = data.templates || [];
+  } catch { state.promptTemplates = []; }
+  renderTemplateList();
+  renderTemplateEditor();
+  renderTemplateSelect();
+}
+
+function renderTemplateList() {
+  const box = $("#templateList");
+  if (!box) return;
+  box.innerHTML = "";
+  for (const t of state.promptTemplates) {
+    const row = document.createElement("div");
+    row.className = "vz-sub-row" + (t.id === state.activeTemplateId ? " on" : "");
+    const label = document.createElement("span");
+    label.style.flex = "1";
+    label.textContent = t.name + (t.builtin ? "（内置）" : "");
+    const dup = document.createElement("button"); dup.className = "vz-btn"; dup.textContent = "复制";
+    dup.addEventListener("click", async (e) => { e.stopPropagation(); await duplicateTemplate(t.id); });
+    row.append(label, dup);
+    if (!t.builtin) {
+      const del = document.createElement("button"); del.className = "vz-btn"; del.textContent = "删除";
+      del.addEventListener("click", async (e) => { e.stopPropagation(); await deleteTemplate(t.id, t.name); });
+      row.append(del);
+    }
+    row.addEventListener("click", () => { state.activeTemplateId = t.id; renderTemplateList(); renderTemplateEditor(); });
+    box.append(row);
+  }
+}
+
+function renderTemplateEditor() {
+  const box = $("#templateEditor");
+  if (!box) return;
+  const tpl = state.promptTemplates.find((t) => t.id === state.activeTemplateId);
+  if (!tpl) { box.innerHTML = '<p class="muted">选择左侧模板查看或编辑；内置模板只读，可复制副本后编辑。留空的阶段自动回退默认模板。</p>'; return; }
+  box.innerHTML = "";
+  const title = document.createElement("b"); title.style.fontSize = "13px";
+  title.textContent = tpl.name + (tpl.builtin ? "（内置只读）" : "");
+  box.append(title);
+  const textareas = {};
+  for (const stage of ["analyze", "direct", "prompt", "review"]) {
+    const lab = document.createElement("div"); lab.className = "muted"; lab.style.marginTop = "8px";
+    lab.textContent = `${TEMPLATE_STAGE_LABELS[stage]}（${stage}）`;
+    const ta = document.createElement("textarea");
+    ta.style.cssText = "width:100%;min-height:90px;margin-top:4px;border:1px solid var(--border);border-radius:9px;padding:8px;font-size:12px";
+    ta.value = tpl.stages[stage] || "";
+    ta.readOnly = tpl.builtin;
+    textareas[stage] = ta;
+    box.append(lab, ta);
+  }
+  if (!tpl.builtin) {
+    const save = document.createElement("button"); save.className = "vz-btn vz-btn-primary"; save.style.marginTop = "8px"; save.textContent = "保存模板";
+    save.addEventListener("click", () => saveTemplate(tpl.id, textareas));
+    box.append(save);
+  }
+}
+
+async function saveTemplate(id, textareas) {
+  try {
+    const stages = {};
+    for (const s of ["analyze", "direct", "prompt", "review"]) stages[s] = textareas[s].value;
+    await api(`/api/drama/prompt-templates/${id}`, { method: "PATCH", body: JSON.stringify({ stages }) });
+    toast("模板已保存");
+    await loadPromptTemplates();
+  } catch (error) { showError(error.message || error); }
+}
+
+async function createTemplate() {
+  const name = window.prompt("模板名称", "我的模板");
+  if (!name) return;
+  try {
+    // 以内置模板为底稿创建，保证四段齐全
+    const builtin = state.promptTemplates.find((t) => t.builtin);
+    const stages = builtin ? builtin.stages : { review: "你是短剧内容审核员。只输出 JSON。" };
+    const { data } = await api("/api/drama/prompt-templates", { method: "POST", body: JSON.stringify({ name, stages }) });
+    state.activeTemplateId = data.template.id;
+    await loadPromptTemplates();
+  } catch (error) { showError(error.message || error); }
+}
+
+async function duplicateTemplate(id) {
+  try {
+    const { data } = await api(`/api/drama/prompt-templates/${id}/duplicate`, { method: "POST", body: "{}" });
+    state.activeTemplateId = data.template.id;
+    await loadPromptTemplates();
+    toast("已复制模板");
+  } catch (error) { showError(error.message || error); }
+}
+
+async function deleteTemplate(id, name) {
+  if (!window.confirm(`删除模板「${name}」？\n引用它的项目会自动回退到默认模板。`)) return;
+  try {
+    await api(`/api/drama/prompt-templates/${id}`, { method: "DELETE" });
+    if (state.activeTemplateId === id) state.activeTemplateId = null;
+    await loadPromptTemplates();
+    toast("已删除模板", name);
+  } catch (error) { showError(error.message || error); }
+}
+
+// 项目选用模板（剧本视图下拉）
+function renderTemplateSelect() {
+  const sel = $("#promptTemplateSelect");
+  if (!sel) return;
+  sel.innerHTML = '<option value="">默认模板</option>';
+  for (const t of state.promptTemplates) {
+    if (t.builtin) continue;
+    const o = document.createElement("option");
+    o.value = t.id; o.textContent = t.name;
+    sel.append(o);
+  }
+  sel.value = state.project?.promptTemplateId || "";
+}
+
+async function changeProjectTemplate() {
+  if (!state.project) return;
+  const sel = $("#promptTemplateSelect");
+  try {
+    const { data } = await api(`/api/drama/projects/${state.project.id}`, { method: "PATCH", body: JSON.stringify({ promptTemplateId: sel.value || null }) });
+    state.project = data.project;
+    toast("已切换提示词模板", "只影响后续重跑的流水线阶段");
+  } catch (error) { showError(error.message || error); }
 }
 
 async function saveCurrentVersion() {
