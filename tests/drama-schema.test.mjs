@@ -175,3 +175,24 @@ test("normalizeProject 保留 review_blocked，未知 status 回退 draft", () =
   assert.equal(normalizeProject({ ...base, status: "review_blocked" }).status, "review_blocked");
   assert.equal(normalizeProject({ ...base, status: "bogus" }).status, "draft");
 });
+
+test("M6：场景/道具外观锁与 props、project.seriesId、snapshot 归一化", () => {
+  const a = normalizeAnalysis({
+    synopsis: "s", genre: "g",
+    characters: [{ id: "char-1", name: "林晚", appearance: "young woman" }],
+    scenes: [{ id: "scene-1", name: "便利店门口", location: "街角", mood: "雨夜", appearance: "convenience store entrance at night, warm signage" }],
+    props: [{ id: "prop-1", name: "雨伞", sceneName: "便利店门口", appearance: "black folding umbrella, worn" }]
+  });
+  assert.equal(a.scenes[0].appearance, "convenience store entrance at night, warm signage");
+  assert.equal(a.props[0].name, "雨伞");
+  assert.equal(a.props[0].appearance, "black folding umbrella, worn");
+  const a2 = normalizeAnalysis({ synopsis: "s", genre: "g", characters: [{ id: "c", name: "x", appearance: "y" }], scenes: [{ id: "s1", name: "n" }] });
+  assert.equal(a2.scenes[0].appearance, "");
+  assert.deepEqual(a2.props, []);
+  assert.equal(normalizeProject({ id: "drama-1", title: "t", script: "s", ratio: "portrait", seriesId: "series-9" }).seriesId, "series-9");
+  assert.equal(normalizeProject({ id: "drama-1", title: "t", script: "s", ratio: "portrait" }).seriesId, null);
+  const snap = normalizeSnapshot({ projectId: "drama-1", name: "v1", script: "剧本", analysis: a, shots: [{ id: "shot-1", dialogue: "x", durationSec: 3 }] });
+  assert.equal(snap.name, "v1");
+  assert.equal(snap.shots.length, 1);
+  assert.equal(snap.analysis.scenes[0].appearance, "convenience store entrance at night, warm signage");
+});
