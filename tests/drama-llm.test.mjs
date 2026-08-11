@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { getDramaLlmConfig, callDramaLlm, extractJson, dramaLlmStatus } from "../lib/drama/llm.mjs";
+import { runScriptAnalysis, runPromptWriting } from "../lib/drama/agents.mjs";
 import { DEMO_DRAMA_SCRIPT } from "../lib/drama/schema.mjs";
 
 test("未配置时落入 mock 模式", () => {
@@ -51,4 +52,20 @@ test("dramaLlmStatus 在 mock 模式不报 connected（保持纯净环境 smoke 
   const status = await dramaLlmStatus(getDramaLlmConfig({}));
   assert.deepEqual({ configured: status.configured, connected: status.connected, state: status.state, mock: status.mock },
     { configured: false, connected: false, state: "mock", mock: true });
+});
+
+test("M6：mock 分析产出场景/道具外观，prompt 注入场景/道具外观", async () => {
+  const analysis = await runScriptAnalysis({ script: "雨夜，便利店门口。" }, { config: { mock: true } });
+  assert.ok(analysis.scenes.every((s) => typeof s.appearance === "string" && s.appearance.length > 0));
+  assert.ok(Array.isArray(analysis.props) && analysis.props.length >= 1);
+  assert.ok(analysis.props.every((p) => p.appearance.length > 0));
+
+  const project = {
+    analysis,
+    shots: [{ id: "shot-1", index: 1, sceneName: analysis.scenes[0].name, characterIds: [analysis.characters[0].id], shotType: "cinematic", camera: "medium", dialogue: "", action: "推门", durationSec: 4, emotion: "失落", fluxPrompt: "", negativePrompt: "", motionPrompt: "" }]
+  };
+  const shots = await runPromptWriting(project, { config: { mock: true } });
+  const fp = shots[0].fluxPrompt;
+  assert.ok(fp.includes(analysis.scenes[0].appearance));   // 场景外观已注入
+  assert.ok(fp.includes(analysis.props[0].appearance));    // 关联道具外观已注入
 });
