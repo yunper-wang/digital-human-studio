@@ -196,3 +196,9 @@ test("M6：场景/道具外观锁与 props、project.seriesId、snapshot 归一�
   assert.equal(snap.shots.length, 1);
   assert.equal(snap.analysis.scenes[0].appearance, "convenience store entrance at night, warm signage");
 });
+
+test("M7：project.promptTemplateId 归一化", () => {
+  assert.equal(normalizeProject({ id: "drama-1", title: "t", script: "s", ratio: "portrait", promptTemplateId: "ptpl-1" }).promptTemplateId, "ptpl-1");
+  assert.equal(normalizeProject({ id: "drama-1", title: "t", script: "s", ratio: "portrait" }).promptTemplateId, null);
+  assert.equal(createDramaProject({ title: "t", script: "剧本" }).promptTemplateId, null);
+});
