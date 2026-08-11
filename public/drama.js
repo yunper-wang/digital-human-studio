@@ -17,7 +17,9 @@ const state = {
   showSubs: true,           // 预览字幕开关
   platformTab: "prompts",  // 平台视图当前 tab：prompts | materials | models
   promptTemplates: [],     // 提示词模板列表缓存
-  activeTemplateId: null   // 平台视图选中的模板 id
+  activeTemplateId: null,  // 平台视图选中的模板 id
+  materials: [],            // 素材库列表缓存
+  materialKind: ""         // 素材库筛选类型："" | image | audio | video
 };
 
 const RUNNING_STATUSES = ["analyzing", "directing", "prompting", "reviewing"];
@@ -350,7 +352,19 @@ function renderCharacters(project, analysis, readOnly = false) {
     voiceSelect.addEventListener("change", () => saveCharacter(project, character.id, { voiceId: voiceSelect.value || null }));
     voiceRow.append(voiceSelect);
 
-    card.append(name, personality, appearance, avatarRow, voiceRow);
+    if (!readOnly) {
+      // 本项目模式：配音参考音频选择（M7，仅引用记录）
+      const refRow = document.createElement("label");
+      refRow.className = "bind-row";
+      refRow.append(document.createTextNode("配音参考"));
+      const refSel = document.createElement("select");
+      materialSelectOptions(refSel, "audio", character.refAudioMaterialId);
+      refSel.addEventListener("change", () => saveAssetPatch({ characters: [{ id: character.id, refAudioMaterialId: refSel.value || null }] }));
+      refRow.append(refSel);
+      card.append(name, personality, appearance, avatarRow, voiceRow, refRow);
+    } else {
+      card.append(name, personality, appearance, avatarRow, voiceRow);
+    }
     box.append(card);
   }
 }
@@ -366,8 +380,27 @@ function renderSceneAssets(project, analysis) {
     item.className = "vz-char";
     const name = document.createElement("b"); name.textContent = `${s.name} · ${s.location || ""}`;
     const mood = document.createElement("div"); mood.className = "muted"; mood.textContent = s.mood || "";
-    const app = document.createElement("div"); app.className = "muted mono"; app.style.fontSize = "10px"; app.textContent = s.appearance || "（无外观锁）";
-    item.append(name, mood, app);
+    item.append(name, mood);
+    if (!analysis) {
+      // 本项目模式：外观锁可编辑 + 参考图选择（M7）
+      const app = document.createElement("textarea");
+      app.className = "muted mono";
+      app.style.cssText = "width:100%;min-height:44px;font-size:10px;margin-top:4px;border:1px solid var(--border);border-radius:8px;padding:6px";
+      app.value = s.appearance || "";
+      app.placeholder = "英文外观锁（重跑提示词阶段后生效）";
+      app.addEventListener("change", () => saveAssetPatch({ scenes: [{ id: s.id, appearance: app.value }] }));
+      const row = document.createElement("label");
+      row.className = "bind-row";
+      row.append(document.createTextNode("参考图"));
+      const sel = document.createElement("select");
+      materialSelectOptions(sel, "image", s.refMaterialId);
+      sel.addEventListener("change", () => saveAssetPatch({ scenes: [{ id: s.id, refMaterialId: sel.value || null }] }));
+      row.append(sel);
+      item.append(app, row);
+    } else {
+      const app = document.createElement("div"); app.className = "muted mono"; app.style.fontSize = "10px"; app.textContent = s.appearance || "（无外观锁）";
+      item.append(app);
+    }
     box.append(item);
   }
 }
@@ -382,8 +415,27 @@ function renderPropAssets(project, analysis) {
     const item = document.createElement("div");
     item.className = "vz-char";
     const name = document.createElement("b"); name.textContent = `${p.name}${p.sceneName ? ` · ${p.sceneName}` : ""}`;
-    const app = document.createElement("div"); app.className = "muted mono"; app.style.fontSize = "10px"; app.textContent = p.appearance || "（无外观锁）";
-    item.append(name, app);
+    item.append(name);
+    if (!analysis) {
+      // 本项目模式：外观锁可编辑 + 参考图选择（M7）
+      const app = document.createElement("textarea");
+      app.className = "muted mono";
+      app.style.cssText = "width:100%;min-height:44px;font-size:10px;margin-top:4px;border:1px solid var(--border);border-radius:8px;padding:6px";
+      app.value = p.appearance || "";
+      app.placeholder = "英文外观锁（重跑提示词阶段后生效）";
+      app.addEventListener("change", () => saveAssetPatch({ props: [{ id: p.id, appearance: app.value }] }));
+      const row = document.createElement("label");
+      row.className = "bind-row";
+      row.append(document.createTextNode("参考图"));
+      const sel = document.createElement("select");
+      materialSelectOptions(sel, "image", p.refMaterialId);
+      sel.addEventListener("change", () => saveAssetPatch({ props: [{ id: p.id, refMaterialId: sel.value || null }] }));
+      row.append(sel);
+      item.append(app, row);
+    } else {
+      const app = document.createElement("div"); app.className = "muted mono"; app.style.fontSize = "10px"; app.textContent = p.appearance || "（无外观锁）";
+      item.append(app);
+    }
     box.append(item);
   }
 }
@@ -874,11 +926,20 @@ loadCatalogs();
 loadProjects().catch(() => toast("项目列表加载失败", "请检查本地服务", "error"));
 loadSeries();
 loadPromptTemplates();
+loadMaterials();
 
 // ---------- 平台视图事件绑定 ----------
 $$("#platformTabSeg [data-tab]").forEach((b) => b.addEventListener("click", () => setPlatformTab(b.dataset.tab)));
 if ($("#newTemplateBtn")) $("#newTemplateBtn").addEventListener("click", createTemplate);
 if ($("#promptTemplateSelect")) $("#promptTemplateSelect").addEventListener("change", changeProjectTemplate);
+// ---------- 平台：素材库事件绑定 ----------
+$$("#materialKindSeg [data-kind]").forEach((b) => b.addEventListener("click", () => {
+  state.materialKind = b.dataset.kind;
+  $$("#materialKindSeg [data-kind]").forEach((x) => x.classList.toggle("on", x === b));
+  loadMaterials();
+}));
+if ($("#uploadMaterialBtn")) $("#uploadMaterialBtn").addEventListener("click", pickMaterialFile);
+if ($("#materialFile")) $("#materialFile").addEventListener("change", onMaterialFilePicked);
 
 // ---------- M5 合成导出 ----------
 async function loadFfmpegStatus() {
@@ -984,6 +1045,7 @@ function setPlatformTab(tab) {
   $("#platformMaterials").classList.toggle("hidden", tab !== "materials");
   $("#platformModels").classList.toggle("hidden", tab !== "models");
   if (tab === "prompts") loadPromptTemplates();
+  if (tab === "materials") loadMaterials();
 }
 
 async function loadPromptTemplates() {
@@ -1110,6 +1172,121 @@ async function changeProjectTemplate() {
     state.project = data.project;
     toast("已切换提示词模板", "只影响后续重跑的流水线阶段");
   } catch (error) { showError(error.message || error); }
+}
+
+// ---------- 平台：素材库 ----------
+async function loadMaterials() {
+  try {
+    const kind = state.materialKind || "";
+    const { data } = await api(`/api/drama/materials${kind ? `?kind=${kind}` : ""}`);
+    state.materials = data.materials || [];
+  } catch { state.materials = []; }
+  renderMaterialGrid();
+}
+
+function renderMaterialGrid() {
+  const box = $("#materialGrid");
+  if (!box) return;
+  box.innerHTML = "";
+  if (!state.materials.length) { box.innerHTML = '<p class="muted">还没有素材，点击「上传素材」添加图片/音频/视频。</p>'; return; }
+  for (const m of state.materials) {
+    const card = document.createElement("div");
+    card.className = "vz-card";
+    card.style.padding = "8px";
+    const url = `/materials/${m.file}`;
+    let preview;
+    if (m.kind === "image") {
+      preview = document.createElement("img");
+      preview.src = url;
+      preview.style.cssText = "width:100%;border-radius:8px;aspect-ratio:1;object-fit:cover";
+    } else if (m.kind === "audio") {
+      preview = document.createElement("audio");
+      preview.src = url; preview.controls = true; preview.style.width = "100%";
+    } else {
+      preview = document.createElement("video");
+      preview.src = url; preview.controls = true; preview.style.cssText = "width:100%;border-radius:8px";
+    }
+    const name = document.createElement("div");
+    name.style.cssText = "font-size:12px;margin-top:6px";
+    name.textContent = m.name;
+    const ops = document.createElement("div");
+    ops.className = "vz-rowline"; ops.style.marginTop = "6px";
+    const rn = document.createElement("button"); rn.className = "vz-btn"; rn.textContent = "改名";
+    rn.addEventListener("click", () => renameMaterial(m));
+    const del = document.createElement("button"); del.className = "vz-btn"; del.textContent = "删除";
+    del.addEventListener("click", () => deleteMaterial(m));
+    ops.append(rn, del);
+    card.append(preview, name, ops);
+    box.append(card);
+  }
+}
+
+async function renameMaterial(m) {
+  const next = window.prompt("素材名称", m.name);
+  if (!next) return;
+  try {
+    await api(`/api/drama/materials/${m.id}`, { method: "PATCH", body: JSON.stringify({ name: next }) });
+    await loadMaterials();
+  } catch (error) { showError(error.message || error); }
+}
+
+async function deleteMaterial(m) {
+  if (!window.confirm(`删除素材「${m.name}」？引用它的资产会显示「素材已删」。`)) return;
+  try {
+    await api(`/api/drama/materials/${m.id}`, { method: "DELETE" });
+    await loadMaterials();
+    toast("已删除素材", m.name);
+  } catch (error) { showError(error.message || error); }
+}
+
+function pickMaterialFile() {
+  const input = $("#materialFile");
+  input.value = "";
+  input.click();
+}
+
+async function onMaterialFilePicked() {
+  const file = $("#materialFile").files[0];
+  if (!file) return;
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("读取文件失败"));
+    reader.readAsDataURL(file);
+  });
+  try {
+    await api("/api/drama/materials", { method: "POST", body: JSON.stringify({ name: file.name.replace(/\.[a-z0-9]+$/i, ""), dataUrl }) });
+    toast("已上传素材", file.name);
+    await loadMaterials();
+  } catch (error) { showError(error.message || error); }
+}
+
+// 资产引用/外观锁保存：M7 PATCH analysis/assets（仅本项目模式可编辑）
+async function saveAssetPatch(payload) {
+  if (!state.project) return;
+  try {
+    const { data } = await api(`/api/drama/projects/${state.project.id}/analysis/assets`, { method: "PATCH", body: JSON.stringify(payload) });
+    state.project = data.project;
+    renderProject();
+    toast("已更新资产");
+  } catch (error) { showError(error.message || error); }
+}
+
+// 素材下拉构造器：kind 过滤；引用已删素材时显示占位项
+function materialSelectOptions(sel, kind, currentId) {
+  const none = document.createElement("option"); none.value = ""; none.textContent = "无";
+  sel.append(none);
+  const known = new Set((state.materials || []).filter((m) => m.kind === kind).map((m) => m.id));
+  for (const m of state.materials || []) {
+    if (m.kind !== kind) continue;
+    const o = document.createElement("option"); o.value = m.id; o.textContent = m.name;
+    sel.append(o);
+  }
+  if (currentId && !known.has(currentId)) {
+    const gone = document.createElement("option"); gone.value = currentId; gone.textContent = "素材已删"; gone.disabled = true;
+    sel.append(gone);
+  }
+  sel.value = currentId || "";
 }
 
 async function saveCurrentVersion() {

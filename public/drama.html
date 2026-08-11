@@ -173,7 +173,22 @@
             </div>
             <div class="vz-card" style="padding:14px" id="templateEditor"></div>
           </div>
-          <div id="platformMaterials" class="hidden"><div class="vz-card" style="padding:14px"><p class="muted">素材库（即将上线）</p></div></div>
+          <div id="platformMaterials" class="hidden">
+            <div class="vz-card" style="padding:14px">
+              <div class="vz-rowline">
+                <b style="font-size:13px">素材库</b>
+                <div class="vz-seg" id="materialKindSeg" style="width:280px">
+                  <button data-kind="" class="on">全部</button>
+                  <button data-kind="image">图片</button>
+                  <button data-kind="audio">音频</button>
+                  <button data-kind="video">视频</button>
+                </div>
+                <input id="materialFile" type="file" accept="image/png,image/jpeg,image/webp,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,video/mp4,video/webm" hidden />
+                <button class="vz-btn" id="uploadMaterialBtn">上传素材…</button>
+              </div>
+              <div id="materialGrid" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px"></div>
+            </div>
+          </div>
           <div id="platformModels" class="hidden"><div class="vz-card" style="padding:14px"><p class="muted">模型状态（即将上线）</p></div></div>
         </section>
       </div>
