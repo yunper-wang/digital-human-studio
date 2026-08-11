@@ -200,6 +200,8 @@ function renderProject() {
   renderStepper();
   renderStages(project);
   renderCharacters(project);
+  renderSceneAssets(project);
+  renderPropAssets(project);
   renderStory(project);
   renderBudget(project);
   renderGateB(project);
@@ -284,6 +286,39 @@ function renderCharacters(project) {
 
     card.append(name, personality, appearance, avatarRow, voiceRow);
     box.append(card);
+  }
+}
+
+function renderSceneAssets(project) {
+  const box = $("#sceneList");
+  if (!box) return;
+  box.innerHTML = "";
+  const scenes = project?.analysis?.scenes || [];
+  if (!scenes.length) { box.innerHTML = '<p class="muted">解析后生成</p>'; return; }
+  for (const s of scenes) {
+    const item = document.createElement("div");
+    item.className = "vz-char";
+    const name = document.createElement("b"); name.textContent = `${s.name} · ${s.location || ""}`;
+    const mood = document.createElement("div"); mood.className = "muted"; mood.textContent = s.mood || "";
+    const app = document.createElement("div"); app.className = "muted mono"; app.style.fontSize = "10px"; app.textContent = s.appearance || "（无外观锁）";
+    item.append(name, mood, app);
+    box.append(item);
+  }
+}
+
+function renderPropAssets(project) {
+  const box = $("#propList");
+  if (!box) return;
+  box.innerHTML = "";
+  const props = project?.analysis?.props || [];
+  if (!props.length) { box.innerHTML = '<p class="muted">解析后生成</p>'; return; }
+  for (const p of props) {
+    const item = document.createElement("div");
+    item.className = "vz-char";
+    const name = document.createElement("b"); name.textContent = `${p.name}${p.sceneName ? ` · ${p.sceneName}` : ""}`;
+    const app = document.createElement("div"); app.className = "muted mono"; app.style.fontSize = "10px"; app.textContent = p.appearance || "（无外观锁）";
+    item.append(name, app);
+    box.append(item);
   }
 }
 
