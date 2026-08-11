@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  createDramaProject, normalizeProject, normalizeShot, normalizeFrame, normalizeClip, normalizeCharacter,
+  createDramaProject, normalizeProject, normalizeAnalysis, normalizeSnapshot, normalizeShot, normalizeFrame, normalizeClip, normalizeCharacter,
   validateAnalysis, validateDirectedShots, validatePromptedShots, validateReview,
   DEMO_DRAMA_SCRIPT
 } from "../lib/drama/schema.mjs";
