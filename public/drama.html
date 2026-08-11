@@ -189,7 +189,16 @@
               <div id="materialGrid" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px"></div>
             </div>
           </div>
-          <div id="platformModels" class="hidden"><div class="vz-card" style="padding:14px"><p class="muted">模型状态（即将上线）</p></div></div>
+          <div id="platformModels" class="hidden">
+            <div class="vz-card" style="padding:14px">
+              <div class="vz-rowline">
+                <b style="font-size:13px">模型与后端状态</b>
+                <button class="vz-btn" id="refreshProvidersBtn">刷新</button>
+              </div>
+              <p class="muted" style="margin-top:6px">配置修改请编辑 .env 或 config 文件后重启服务；此处仅展示状态，密钥永不明文展示。</p>
+              <div id="providerGrid" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"></div>
+            </div>
+          </div>
         </section>
       </div>
     </div>

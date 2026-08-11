@@ -940,6 +940,7 @@ $$("#materialKindSeg [data-kind]").forEach((b) => b.addEventListener("click", ()
 }));
 if ($("#uploadMaterialBtn")) $("#uploadMaterialBtn").addEventListener("click", pickMaterialFile);
 if ($("#materialFile")) $("#materialFile").addEventListener("change", onMaterialFilePicked);
+if ($("#refreshProvidersBtn")) $("#refreshProvidersBtn").addEventListener("click", loadProviders);
 
 // ---------- M5 合成导出 ----------
 async function loadFfmpegStatus() {
@@ -1046,6 +1047,7 @@ function setPlatformTab(tab) {
   $("#platformModels").classList.toggle("hidden", tab !== "models");
   if (tab === "prompts") loadPromptTemplates();
   if (tab === "materials") loadMaterials();
+  if (tab === "models") loadProviders();
 }
 
 async function loadPromptTemplates() {
@@ -1287,6 +1289,49 @@ function materialSelectOptions(sel, kind, currentId) {
     sel.append(gone);
   }
   sel.value = currentId || "";
+}
+
+// ---------- 平台：模型状态 ----------
+const PROVIDER_STATUS_LABEL = { ready: "● 就绪", degraded: "● 降级", missing: "● 未配置" };
+const PROVIDER_STATUS_COLOR = { ready: "var(--ok, #2a9d5c)", degraded: "#c9a227", missing: "var(--muted)" };
+const PROVIDER_REQUIRED_LABEL = { required: "必需", recommended: "推荐", optional: "可选" };
+
+async function loadProviders() {
+  const box = $("#providerGrid");
+  if (!box) return;
+  box.innerHTML = '<p class="muted">探测中…</p>';
+  let providers = [];
+  try {
+    const { data } = await api("/api/drama/providers");
+    providers = data.providers || [];
+  } catch (error) {
+    box.innerHTML = `<p class="muted">状态获取失败：${error.message}</p>`;
+    return;
+  }
+  box.innerHTML = "";
+  for (const p of providers) {
+    const card = document.createElement("div");
+    card.className = "vz-card";
+    card.style.padding = "10px";
+    const head = document.createElement("div");
+    head.style.cssText = "display:flex;justify-content:space-between;align-items:center";
+    const name = document.createElement("b"); name.style.fontSize = "13px"; name.textContent = p.name;
+    const req = document.createElement("span"); req.className = "muted"; req.style.fontSize = "11px";
+    req.textContent = PROVIDER_REQUIRED_LABEL[p.required] || p.required;
+    head.append(name, req);
+    const status = document.createElement("div");
+    status.style.cssText = `margin-top:6px;font-size:12px;color:${PROVIDER_STATUS_COLOR[p.status] || "inherit"}`;
+    status.textContent = PROVIDER_STATUS_LABEL[p.status] || p.status;
+    const summary = document.createElement("div"); summary.className = "muted"; summary.style.cssText = "margin-top:4px;font-size:12px";
+    summary.textContent = p.summary || "";
+    card.append(head, status, summary);
+    if (p.hint) {
+      const hint = document.createElement("div"); hint.className = "muted"; hint.style.cssText = "margin-top:4px;font-size:11px";
+      hint.textContent = p.hint;
+      card.append(hint);
+    }
+    box.append(card);
+  }
 }
 
 async function saveCurrentVersion() {
