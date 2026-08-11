@@ -50,3 +50,17 @@ test("审核阶段产出结构化结论", async () => {
   assert.equal(typeof review.pass, "boolean");
   assert.ok(Array.isArray(review.issues));
 });
+
+test("M7：deps.prompts 覆盖阶段系统提示词", async () => {
+  let seenSystem = null;
+  const deps = {
+    config: { mock: false, baseUrl: "http://127.0.0.1:9", model: "m", apiKey: "", timeoutMs: 1000, maxRetries: 0 },
+    fetchImpl: async (url, opts) => {
+      seenSystem = JSON.parse(opts.body).messages[0].content;
+      return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ synopsis: "s", genre: "g", characters: [{ id: "c1", name: "n", appearance: "a" }], scenes: [{ id: "s1", name: "sc" }] }) } }] }) };
+    },
+    prompts: { analyze: "自定义分析提示词" }
+  };
+  await runScriptAnalysis({ script: "x".repeat(60) }, deps);
+  assert.equal(seenSystem, "自定义分析提示词");
+});
