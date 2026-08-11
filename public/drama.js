@@ -4,6 +4,7 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const state = {
   project: null,
   projects: [],
+  series: [],
   avatars: [],
   voices: [],
   pollTimer: null,
@@ -132,6 +133,43 @@ async function createProject() {
   });
   await loadProjects(data.project.id);
   return data.project;
+}
+
+// ---------- 剧集两级切换与资产同步 ----------
+
+async function loadSeries() {
+  try { const { data } = await api("/api/drama/series"); state.series = data.series || []; } catch { state.series = []; }
+  renderSeriesSelect();
+}
+function renderSeriesSelect() {
+  const sel = $("#seriesSelect");
+  if (!sel) return;
+  sel.innerHTML = '<option value="">未分组</option>';
+  for (const s of state.series || []) {
+    const o = document.createElement("option"); o.value = s.id; o.textContent = `${s.title}（${s.projectIds.length}集）`; sel.append(o);
+  }
+  const cur = state.project?.seriesId || "";
+  sel.value = cur;
+  $("#assignSeriesBtn")?.classList.toggle("hidden", !state.project);
+}
+async function createSeries() {
+  const title = window.prompt("剧集名称", "我的短剧系列");
+  if (!title) return;
+  await api("/api/drama/series", { method: "POST", body: JSON.stringify({ title }) });
+  await loadSeries();
+  toast("已创建剧集", title);
+}
+async function assignToSeries() {
+  if (!state.project) return;
+  const sid = $("#seriesSelect").value;
+  if (!sid) { toast("未选择剧集", "先在左侧选择目标剧集", "error"); return; }
+  await api(`/api/drama/series/${sid}/projects`, { method: "POST", body: JSON.stringify({ projectId: state.project.id }) });
+  // 同步当前项目资产到剧集共享库
+  const a = state.project.analysis || {};
+  await api(`/api/drama/series/${sid}/assets`, { method: "PUT", body: JSON.stringify({ characters: a.characters || [], scenes: a.scenes || [], props: a.props || [] }) }).catch(() => {});
+  state.project.seriesId = sid;
+  await loadSeries();
+  toast("已归入剧集", "资产已同步到共享库");
 }
 
 // ---------- 视图切换与步骤条 ----------
@@ -731,6 +769,8 @@ $("#newProjectBtn").addEventListener("click", () => {
   setView("script");
   showError(null);
 });
+if ($("#newSeriesBtn")) $("#newSeriesBtn").addEventListener("click", createSeries);
+if ($("#assignSeriesBtn")) $("#assignSeriesBtn").addEventListener("click", assignToSeries);
 $("#demoBtn").addEventListener("click", async () => {
   const { data } = await api("/api/drama/demo");
   $("#dramaScript").value = data.script;
@@ -754,6 +794,7 @@ renderStepper();
 loadHealth();
 loadCatalogs();
 loadProjects().catch(() => toast("项目列表加载失败", "请检查本地服务", "error"));
+loadSeries();
 
 // ---------- M5 合成导出 ----------
 async function loadFfmpegStatus() {
