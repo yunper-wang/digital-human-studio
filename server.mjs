@@ -9,6 +9,7 @@ import { createDramaStore } from "./lib/drama/store.mjs";
 import { handleDramaApi } from "./lib/drama/routes.mjs";
 import { createSeriesStore } from "./lib/drama/series.mjs";
 import { createPromptStore } from "./lib/drama/prompts.mjs";
+import { createMaterialStore } from "./lib/drama/materials.mjs";
 import { getDramaLlmConfig, dramaLlmStatus } from "./lib/drama/llm.mjs";
 import { getComfyuiConfig, getComfyuiStatus, loadVideoWorkflowTemplate } from "./lib/drama/comfyui.mjs";
 import { getDramaPricing } from "./lib/drama/budget.mjs";
@@ -75,7 +76,8 @@ const contentTypes = {
   ".m4a": "audio/mp4",
   ".srt": "application/x-subrip; charset=utf-8",
   ".svg": "image/svg+xml",
-  ".webp": "image/webp"
+  ".webp": "image/webp",
+  ".webm": "video/webm"
 };
 
 function envelope(ok, data = null, options = {}) {
@@ -726,6 +728,7 @@ async function handleApi(request, response, url) {
       store: dramaStore,
       seriesStore: createSeriesStore(dataRoot),
       promptStore: createPromptStore(dataRoot),
+      materialStore: createMaterialStore(dataRoot),
       llmDeps: { config: dramaLlmConfig },
       comfyConfig: comfyuiConfig,
       pricing: dramaPricing,
@@ -750,6 +753,18 @@ function serveStatic(response, pathname) {
     if (!voice) return false;
     response.writeHead(200, { "Cache-Control": "private, max-age=3600", "Content-Type": contentTypes[extname(voice.previewPath)] || "application/octet-stream" });
     createReadStream(voice.previewPath).pipe(response);
+    return true;
+  }
+  if (pathname.startsWith("/materials/")) {
+    const fileName = pathname.slice("/materials/".length);
+    if (!/^mat-[a-f0-9-]+\.(png|jpg|webp|mp3|wav|m4a|mp4|webm)$/i.test(fileName)) return false;
+    const materialPath = join(dataRoot, "materials", fileName);
+    if (!existsSync(materialPath)) return false;
+    response.writeHead(200, {
+      "Cache-Control": "private, max-age=86400",
+      "Content-Type": contentTypes[extname(materialPath)] || "application/octet-stream"
+    });
+    createReadStream(materialPath).pipe(response);
     return true;
   }
   if (pathname.startsWith("/uploads/")) {
