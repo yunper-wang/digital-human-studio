@@ -8,6 +8,7 @@ import { createServer } from "node:http";
 import { createDramaStore } from "./lib/drama/store.mjs";
 import { handleDramaApi } from "./lib/drama/routes.mjs";
 import { createSeriesStore } from "./lib/drama/series.mjs";
+import { createPromptStore } from "./lib/drama/prompts.mjs";
 import { getDramaLlmConfig, dramaLlmStatus } from "./lib/drama/llm.mjs";
 import { getComfyuiConfig, getComfyuiStatus, loadVideoWorkflowTemplate } from "./lib/drama/comfyui.mjs";
 import { getDramaPricing } from "./lib/drama/budget.mjs";
@@ -724,6 +725,7 @@ async function handleApi(request, response, url) {
       allowRequest,
       store: dramaStore,
       seriesStore: createSeriesStore(dataRoot),
+      promptStore: createPromptStore(dataRoot),
       llmDeps: { config: dramaLlmConfig },
       comfyConfig: comfyuiConfig,
       pricing: dramaPricing,
