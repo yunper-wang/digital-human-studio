@@ -531,10 +531,11 @@ function renderStrip(project) {
     const bdg = document.createElement("span"); bdg.className = `bdg ${shot.shotType}`; bdg.textContent = shot.shotType === "dialogue" ? "词" : "画"; th.append(bdg);
     if (shot.shotType === "dialogue") {
       const audio = shot.clip?.audio || {};
-      const vtxt = audio.status === "ready" ? "🎙" : audio.status === "generating" ? "…" : shot.audioMode === "none" ? "🔇" : "";
+      const vtxt = audio.status === "ready" ? (shot.clip?.voiceRef?.used === true ? "克隆" : "🎙") : audio.status === "generating" ? "…" : shot.audioMode === "none" ? "🔇" : "";
       if (vtxt) { const vb = document.createElement("span"); vb.className = "vz-voice"; vb.textContent = vtxt; th.append(vb); }
     }
     const dur = document.createElement("span"); dur.className = "dur"; dur.textContent = `${shot.durationSec}s`; th.append(dur);
+    if (shot.frame.controlnet?.used === true) { const cn = document.createElement("span"); cn.className = "vz-voice ok"; cn.textContent = "CN"; th.append(cn); }
     if (shot.frame.status === "confirmed") { const ok = document.createElement("span"); ok.className = "ok"; ok.textContent = "✓"; th.append(ok); }
     th.addEventListener("click", () => selectShot(shot.id));
     box.append(th);
