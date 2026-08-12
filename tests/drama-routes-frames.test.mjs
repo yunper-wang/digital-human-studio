@@ -11,6 +11,7 @@ import { runDramaPipeline } from "../lib/drama/pipeline.mjs";
 import { generateShotFrame, handleDramaApi } from "../lib/drama/routes.mjs";
 import { getComfyuiConfig } from "../lib/drama/comfyui.mjs";
 import { createMaterialStore } from "../lib/drama/materials.mjs";
+import { createJobQueue } from "../lib/drama/queue.mjs";
 import { estimateBudget, getDramaPricing } from "../lib/drama/budget.mjs";
 
 const PNG_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
@@ -213,5 +214,39 @@ test("M8：首帧注入参考图→controlnet.used=true；素材缺失降级 use
   const shot2 = store.get(project.id).shots[0];
   assert.equal(shot2.frame.controlnet.used, false);
   assert.equal(shot2.frame.controlnet.source, "fallback");
+  rmSync(dataRoot, { recursive: true, force: true });
+});
+
+test("M10：首帧经队列 enqueue；无 jobQueue 回退直接执行", async () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), "drama-m10f-"));
+  const store = createDramaStore(dataRoot);
+  const project = store.save(createDramaProject({ title: "t", script: DEMO_DRAMA_SCRIPT }));
+  store.update(project.id, (p) => {
+    p.analysis = normalizeAnalysis({ synopsis: "s", genre: "g", characters: [{ id: "char-1", name: "n", appearance: "a" }], scenes: [{ id: "scene-1", name: "sc", appearance: "a" }], props: [] });
+    if (!p.shots.length) p.shots = [normalizeShot({ id: "shot-1", sceneName: "sc", shotType: "cinematic", fluxPrompt: "cinematic film still, store at night", durationSec: 3 }, 0)];
+    p.gateAConfirmedAt = new Date().toISOString();
+  });
+  const runLog = [];
+  const q = createJobQueue({ comfyui: 1, voice: 2, ffmpeg: 1 });
+  const ctx = {
+    sendJson: (r, s, b) => r.sendJson(s, b), envelope: (ok, d, o = {}) => ({ ok, ...(ok ? { data: d } : { errorCode: o.errorCode, message: o.message }) }), readJson: async (r) => JSON.parse(r.body || "{}"), allowRequest: () => true,
+    store, jobQueue: q,
+    comfyConfig: { baseUrl: "http://127.0.0.1:9", steps: 4, timeoutMs: 3000, pollIntervalMs: 10 },
+    frameFetch: async (url) => {
+      runLog.push(url);
+      if (url.includes("/prompt")) return { ok: true, json: async () => ({ prompt_id: "p1" }) };
+      if (url.includes("/history/")) return { ok: true, json: async () => ({ p1: { outputs: { "13": { images: [{ filename: "out.png", subfolder: "", type: "output" }] } } } }) };
+      if (url.includes("/view")) return { ok: true, arrayBuffer: async () => Buffer.from([0x89, 0x50, 0x4e, 0x47]) };
+      return { ok: false };
+    },
+    frameSleep: async () => {},
+    materialStore: { get: () => null, getBytes: () => null }, controlnetConfig: null,
+    findAvatar: () => null, findVoice: () => null, pricing: {},
+    seedanceStatus: () => ({ connected: false }), seedanceConfig: {}, audioDeps: {}
+  };
+  await generateShotFrame(ctx, project.id, project.shots[0].id);
+  assert.equal(store.get(project.id).shots[0].frame.status, "ready");
+  assert.ok(runLog.some((u) => u.includes("/prompt")));
+  assert.equal(q.status().comfyui.running, 0);
   rmSync(dataRoot, { recursive: true, force: true });
 });
