@@ -1,7 +1,7 @@
 // tests/drama-agents.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runScriptAnalysis, runDirection, runPromptWriting, runReview } from "../lib/drama/agents.mjs";
+import { runScriptAnalysis, runDirection, runPromptWriting, runReview, runSuggestions } from "../lib/drama/agents.mjs";
 import { createDramaProject, DEMO_DRAMA_SCRIPT } from "../lib/drama/schema.mjs";
 import { getDramaLlmConfig } from "../lib/drama/llm.mjs";
 
@@ -63,4 +63,20 @@ test("M7：deps.prompts 覆盖阶段系统提示词", async () => {
   };
   await runScriptAnalysis({ script: "x".repeat(60) }, deps);
   assert.equal(seenSystem, "自定义分析提示词");
+});
+
+test("M12：runSuggestions 产出合法建议结构", async () => {
+  const deps = {
+    config: { mock: false, baseUrl: "http://127.0.0.1:9", model: "m", apiKey: "", timeoutMs: 1000, maxRetries: 0 },
+    fetchImpl: async () => {
+      const content = JSON.stringify({ suggestions: [{ category: "structure", severity: "warn", target: null, message: "高潮缺失" }, { category: "arc", severity: "info", target: "林晚", message: "主角无成长线" }] });
+      return { ok: true, json: async () => ({ choices: [{ message: { content } }] }) };
+    }
+  };
+  const project = { script: "x".repeat(60), analysis: { synopsis: "s", genre: "g", characters: [{ id: "c1", name: "林晚", appearance: "a" }], scenes: [{ id: "s1", name: "sc" }] } };
+  const result = await runSuggestions(project, deps);
+  assert.ok(Array.isArray(result.suggestions));
+  assert.equal(result.suggestions.length, 2);
+  assert.equal(result.suggestions[0].category, "structure");
+  assert.equal(result.suggestions[1].target, "林晚");
 });
