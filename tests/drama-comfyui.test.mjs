@@ -76,3 +76,41 @@ test("画幅尺寸表覆盖三种比例", () => {
   assert.deepEqual(FRAME_SIZES.landscape, [1344, 768]);
   assert.deepEqual(FRAME_SIZES.square, [1024, 1024]);
 });
+
+import { loadControlnetConfig } from "../lib/drama/comfyui.mjs";
+
+test("M8 loadControlnetConfig 未配置返回 null；配置完整返回三字段", () => {
+  assert.equal(loadControlnetConfig({}), null);
+  assert.equal(loadControlnetConfig({ COMFYUI_CONTROLNET_NAME: "" }), null);
+  const cfg = loadControlnetConfig({ COMFYUI_CONTROLNET_NAME: "flux-controlnet-depth.safetensors", COMFYUI_CONTROLNET_PREPROCESSOR: "canny", COMFYUI_CONTROLNET_STRENGTH: "0.9" });
+  assert.deepEqual(cfg, { name: "flux-controlnet-depth.safetensors", preprocessor: "canny", strength: 0.9 });
+  assert.equal(loadControlnetConfig({ COMFYUI_CONTROLNET_NAME: "x.safetensors" }).strength, 0.8); // 默认 0.8
+  assert.equal(loadControlnetConfig({ COMFYUI_CONTROLNET_NAME: "x.safetensors" }).preprocessor, "depth"); // 默认 depth
+});
+
+test("M8 buildFluxWorkflow 无 refImage/controlnetConfig → 原工作流（无 ControlNet 节点）", () => {
+  const wf = buildFluxWorkflow({ prompt: "p", width: 768, height: 1344, seed: 1, config });
+  assert.ok(!wf["20"]);
+  assert.equal(wf["3"].inputs.positive[0], "6"); // positive 仍直连 CLIPTextEncode
+});
+
+test("M8 buildFluxWorkflow 有 refImage+controlnetConfig → 含 ControlNet 节点且 positive 重连", () => {
+  const cn = { name: "flux-controlnet-depth.safetensors", preprocessor: "depth", strength: 0.8 };
+  const wf = buildFluxWorkflow({ prompt: "p", width: 768, height: 1344, seed: 1, config, refImage: "uploaded.png", controlnetConfig: cn });
+  assert.ok(wf["20"], "含 LoadImage 节点");
+  assert.equal(wf["20"].inputs.image, "uploaded.png");
+  assert.ok(wf["21"], "含 ControlNet 预处理器节点");
+  assert.ok(wf["22"], "含 ControlNetApply 节点");
+  assert.equal(wf["3"].inputs.positive[0], "22"); // positive 重连到 ControlNetApply 输出
+  for (const node of Object.values(wf)) {
+    for (const value of Object.values(node.inputs)) {
+      if (Array.isArray(value)) assert.ok(wf[value[0]], `missing node ${value[0]}`);
+    }
+  }
+});
+
+test("M8 buildFluxWorkflow 有 refImage 但 controlnetConfig=null → 降级原工作流", () => {
+  const wf = buildFluxWorkflow({ prompt: "p", width: 768, height: 1344, seed: 1, config, refImage: "x.png", controlnetConfig: null });
+  assert.ok(!wf["20"]);
+  assert.equal(wf["3"].inputs.positive[0], "6");
+});
