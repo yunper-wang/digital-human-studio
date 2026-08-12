@@ -233,7 +233,7 @@ function renderStepper() {
   box.innerHTML = "";
   for (const s of STEPPER) {
     const li = document.createElement("li");
-    li.className = "vz-step" + (s.key === active ? " on" : "");
+    li.className = "vz-step" + (s.key === active ? " on" : "") + (STEPPER.indexOf(s) < STEPPER.findIndex((x) => x.key === active) ? " done" : "");
     li.innerHTML = `<span class="no">${s.no}</span>${s.label}`;
     li.addEventListener("click", () => setView(s.key));
     box.append(li);

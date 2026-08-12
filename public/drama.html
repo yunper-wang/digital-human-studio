@@ -11,25 +11,25 @@
     <aside class="vz-rail">
       <div class="vz-logo">剧</div>
       <button class="vz-ic on" data-view="script" title="剧本">
-        <span class="ic-glyph">▤</span><span class="ic-label">剧本</span>
+        <span class="ic-glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 12h6M9 15h6M9 18h4"/></svg></span><span class="ic-label">剧本</span>
       </button>
       <button class="vz-ic" data-view="assets" title="资产">
-        <span class="ic-glyph">◉</span><span class="ic-label">资产</span>
+        <span class="ic-glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.8 20c1.2-3.7 3.9-5.4 7.2-5.4s6 1.7 7.2 5.4"/></svg></span><span class="ic-label">资产</span>
       </button>
       <button class="vz-ic" data-view="story" title="分镜">
-        <span class="ic-glyph">▦</span><span class="ic-label">分镜</span>
+        <span class="ic-glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M8 4.5v15M16 4.5v15M3 9.5h5M3 14.5h5M16 9.5h5M16 14.5h5"/></svg></span><span class="ic-label">分镜</span>
       </button>
       <button class="vz-ic" data-view="generate" title="生成">
-        <span class="ic-glyph">▶</span><span class="ic-label">生成</span>
+        <span class="ic-glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M11 4l1.7 4.6 4.8 1.7-4.8 1.7L11 16.8l-1.7-4.8L4.5 10.3l4.8-1.7z"/><path d="M18 14.5l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9z"/></svg></span><span class="ic-label">生成</span>
       </button>
       <button class="vz-ic" data-view="platform" title="平台">
-        <span class="ic-glyph">⚙</span><span class="ic-label">平台</span>
+        <span class="ic-glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.2v2.6M12 18.2v2.6M3.2 12h2.6M18.2 12h2.6M5.8 5.8l1.8 1.8M16.4 16.4l1.8 1.8M18.2 5.8l-1.8 1.8M7.6 16.4l-1.8 1.8"/></svg></span><span class="ic-label">平台</span>
       </button>
     </aside>
 
     <div class="vz-main">
       <header class="vz-topbar">
-        <div class="t">▦ 短剧项目</div>
+        <div class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M8 4.5v15M16 4.5v15M3 9.5h5M3 14.5h5M16 9.5h5M16 14.5h5"/></svg>短剧项目</div>
         <div class="r">
           <span class="vz-provider" id="llmStatus"><span class="lg">LL</span>编排模型<i></i></span>
           <span class="vz-provider" id="comfyStatus"><span class="lg">C</span>ComfyUI<i></i></span>
@@ -58,7 +58,7 @@
               <span class="muted" id="dramaCharCount">0 字</span>
               <span class="muted" id="projectStatus">未开始</span>
               <button class="vz-btn" id="demoBtn">用演示剧本</button>
-              <button class="vz-btn vz-btn-primary" id="runPipelineBtn" disabled>开始解析 →</button>
+              <button class="vz-btn vz-btn-red" id="runPipelineBtn" disabled>开始解析 →</button>
             </div>
           </div>
 
@@ -68,7 +68,7 @@
             <textarea id="dramaScript2" spellcheck="false" style="width:100%;min-height:180px;margin-top:10px;border:1px solid var(--border);border-radius:9px;padding:10px" placeholder="粘贴或输入短剧剧本…" oninput="document.getElementById('dramaScript').value=this.value;document.getElementById('dramaScript').dispatchEvent(new Event('input'))"></textarea>
             <div style="display:flex;justify-content:space-between;margin-top:8px"><span class="muted" id="dramaCharCount2">0 字</span><span class="muted" id="projectStatus2">未开始</span></div>
             <div style="display:flex;gap:8px;margin-top:10px">
-              <button class="vz-btn vz-btn-primary" id="runPipelineBtn2">开始解析</button>
+              <button class="vz-btn vz-btn-red" id="runPipelineBtn2">开始解析</button>
               <button class="vz-btn" id="demoBtn2">用演示剧本</button>
             </div>
           </div>
@@ -163,7 +163,7 @@
           <div class="vz-card" style="padding:14px" id="composeCard">
             <b style="font-size:13px">合成成片</b>
             <p class="muted" id="composeStatus" style="margin-top:6px">尚未合成</p>
-            <div class="vz-rowline" style="margin-top:8px"><button class="vz-btn vz-btn-primary" id="composeBtn">⚙ 合成成片</button></div>
+            <div class="vz-rowline" style="margin-top:8px"><button class="vz-btn vz-btn-red" id="composeBtn">⚙ 合成成片</button></div>
             <div id="composePreview" style="margin-top:10px"></div>
             <div class="vz-rowline" id="exportBar" style="margin-top:8px">
               <a class="vz-btn hidden" id="exportMp4" download>导出 MP4</a>
@@ -194,14 +194,14 @@
             <div id="versionList" style="margin-top:8px"></div>
           </div>
 
-          <div class="vz-card" style="padding:14px">
+          <div class="vz-card vz-g-budget" style="padding:14px">
             <b style="font-size:13px">预算单（预估）</b>
             <div id="budgetLines"></div>
             <div class="vz-budget-total"><span>预计付费合计</span><b id="budgetTotal">—</b></div>
-            <button class="vz-btn vz-btn-primary hidden" id="gateABtn" style="margin-top:10px">确认预算，进入首帧生成</button>
+            <button class="vz-btn vz-btn-red hidden" id="gateABtn" style="margin-top:10px">确认预算，进入首帧生成</button>
             <p class="muted" style="margin-top:8px">首帧使用本机算力（¥0）。视频单价为预估值，实际以供应商扣费为准。</p>
           </div>
-          <div class="vz-card" style="padding:14px">
+          <div class="vz-card vz-g-gate" style="padding:14px">
             <b style="font-size:13px">首帧与视频确认</b>
             <div class="vz-rowline" style="margin-top:8px"><span class="muted" style="width:40px">首帧</span><div class="vz-progress"><i id="gateBProgress"></i></div><span class="muted" id="gateBText">0/0</span></div>
             <div class="vz-rowline" style="margin-top:8px"><span class="muted" style="width:40px">视频</span><div class="vz-progress"><i id="clipProgress"></i></div><span class="muted" id="clipText">0/0</span></div>
@@ -269,7 +269,7 @@
       <p class="muted" style="margin-top:8px">确认后才会开始进一步操作；首帧生成不产生费用。台词或时长变更会使确认失效。</p>
       <div class="vz-modal-actions">
         <button class="vz-btn" id="gateACancel">再改改</button>
-        <button class="vz-btn vz-btn-primary" id="gateAConfirm">确认预算</button>
+        <button class="vz-btn vz-btn-red" id="gateAConfirm">确认预算</button>
       </div>
     </div>
   </div>
