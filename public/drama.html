@@ -60,6 +60,23 @@
               <span class="muted">提示词模板</span>
               <select id="promptTemplateSelect" class="vz-select" style="max-width:220px"></select>
             </div>
+            <div class="vz-rowline" style="margin-top:10px">
+              <b style="font-size:13px">后端覆盖</b>
+              <span class="muted" id="providerOverrideHint">未配置时走默认（.env）</span>
+            </div>
+            <div class="vz-rowline" style="margin-top:6px">
+              <input id="ovLlmBaseUrl" type="text" placeholder="LLM base_url（可选）" class="vz-input" style="max-width:200px" />
+              <input id="ovLlmModel" type="text" placeholder="model（可选）" class="vz-input" style="max-width:140px" />
+              <input id="ovLlmApiKey" type="password" placeholder="api_key（可选）" class="vz-input" style="max-width:160px" />
+              <button class="vz-btn" id="ovLlmSave">保存 LLM</button>
+              <button class="vz-btn" id="ovLlmClear">清除</button>
+            </div>
+            <div class="vz-rowline" style="margin-top:6px">
+              <input id="ovVoiceKey" type="password" placeholder="ElevenLabs key（可选）" class="vz-input" style="max-width:220px" />
+              <button class="vz-btn" id="ovVoiceSave">保存配音</button>
+              <button class="vz-btn" id="ovVoiceClear">清除</button>
+            </div>
+            <p class="muted" style="margin-top:6px;font-size:11px">密钥仅存本机，永不回显；切换只影响后续发起的流水线/口播。</p>
           </div>
         </section>
 

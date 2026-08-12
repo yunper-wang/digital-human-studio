@@ -19,7 +19,8 @@ const state = {
   promptTemplates: [],     // 提示词模板列表缓存
   activeTemplateId: null,  // 平台视图选中的模板 id
   materials: [],            // 素材库列表缓存
-  materialKind: ""         // 素材库筛选类型："" | image | audio | video
+  materialKind: "",         // 素材库筛选类型："" | image | audio | video
+  providerOverrides: null   // M9：项目级后端覆盖（脱敏标记）
 };
 
 const RUNNING_STATUSES = ["analyzing", "directing", "prompting", "reviewing"];
@@ -274,6 +275,7 @@ function renderProject() {
   renderBgm(project);
   renderVersions(project);
   renderTemplateSelect();
+  loadProviderOverrides();
   $("#resumeBtn").classList.toggle("hidden", project.status !== "failed");
   $("#genAllFramesBtn").classList.toggle("hidden", !project.gateAConfirmedAt || !project.shots.some((s) => ["pending", "failed"].includes(s.frame.status)));
   if (project.status === "failed" && project.pipeline?.error) {
@@ -928,11 +930,17 @@ loadProjects().catch(() => toast("项目列表加载失败", "请检查本地服
 loadSeries();
 loadPromptTemplates();
 loadMaterials();
+loadProviderOverrides();
 
 // ---------- 平台视图事件绑定 ----------
 $$("#platformTabSeg [data-tab]").forEach((b) => b.addEventListener("click", () => setPlatformTab(b.dataset.tab)));
 if ($("#newTemplateBtn")) $("#newTemplateBtn").addEventListener("click", createTemplate);
 if ($("#promptTemplateSelect")) $("#promptTemplateSelect").addEventListener("change", changeProjectTemplate);
+// ---------- M9：后端覆盖事件绑定 ----------
+if ($("#ovLlmSave")) $("#ovLlmSave").addEventListener("click", saveOvLlm);
+if ($("#ovLlmClear")) $("#ovLlmClear").addEventListener("click", clearOvLlm);
+if ($("#ovVoiceSave")) $("#ovVoiceSave").addEventListener("click", saveOvVoice);
+if ($("#ovVoiceClear")) $("#ovVoiceClear").addEventListener("click", clearOvVoice);
 // ---------- 平台：素材库事件绑定 ----------
 $$("#materialKindSeg [data-kind]").forEach((b) => b.addEventListener("click", () => {
   state.materialKind = b.dataset.kind;
@@ -1174,6 +1182,64 @@ async function changeProjectTemplate() {
     const { data } = await api(`/api/drama/projects/${state.project.id}`, { method: "PATCH", body: JSON.stringify({ promptTemplateId: sel.value || null }) });
     state.project = data.project;
     toast("已切换提示词模板", "只影响后续重跑的流水线阶段");
+  } catch (error) { showError(error.message || error); }
+}
+
+// ---------- M9：项目级后端覆盖 ----------
+async function loadProviderOverrides() {
+  if (!state.project) return;
+  try {
+    const { data } = await api(`/api/drama/projects/${state.project.id}/provider-overrides`);
+    state.providerOverrides = data.overrides;
+  } catch { state.providerOverrides = { llm: null, voice: null }; }
+  renderProviderOverrides();
+}
+
+function renderProviderOverrides() {
+  if (!state.project) return;
+  const ov = state.providerOverrides || { llm: null, voice: null };
+  const hint = $("#providerOverrideHint");
+  if (hint) hint.textContent = ov.llm || ov.voice ? "已配置覆盖" : "未配置时走默认（.env）";
+  // 不回显密钥；只填 baseUrl/model（脱敏可显示）
+  if ($("#ovLlmBaseUrl")) $("#ovLlmBaseUrl").value = ov.llm?.baseUrl || "";
+  if ($("#ovLlmModel")) $("#ovLlmModel").value = ov.llm?.model || "";
+  if ($("#ovLlmApiKey")) $("#ovLlmApiKey").value = ""; // 密钥不回显
+  if ($("#ovVoiceKey")) $("#ovVoiceKey").value = ""; // 密钥不回显
+}
+
+async function saveOvLlm() {
+  if (!state.project) return;
+  try {
+    await api(`/api/drama/projects/${state.project.id}/provider-overrides`, { method: "PATCH", body: JSON.stringify({ llm: { baseUrl: $("#ovLlmBaseUrl").value.trim(), model: $("#ovLlmModel").value.trim(), apiKey: $("#ovLlmApiKey").value.trim() } }) });
+    toast("LLM 覆盖已保存");
+    await loadProviderOverrides();
+  } catch (error) { showError(error.message || error); }
+}
+
+async function clearOvLlm() {
+  if (!state.project) return;
+  try {
+    await api(`/api/drama/projects/${state.project.id}/provider-overrides`, { method: "PATCH", body: JSON.stringify({ clear: ["llm"] }) });
+    toast("LLM 覆盖已清除");
+    await loadProviderOverrides();
+  } catch (error) { showError(error.message || error); }
+}
+
+async function saveOvVoice() {
+  if (!state.project) return;
+  try {
+    await api(`/api/drama/projects/${state.project.id}/provider-overrides`, { method: "PATCH", body: JSON.stringify({ voice: { elevenKey: $("#ovVoiceKey").value.trim() } }) });
+    toast("配音覆盖已保存");
+    await loadProviderOverrides();
+  } catch (error) { showError(error.message || error); }
+}
+
+async function clearOvVoice() {
+  if (!state.project) return;
+  try {
+    await api(`/api/drama/projects/${state.project.id}/provider-overrides`, { method: "PATCH", body: JSON.stringify({ clear: ["voice"] }) });
+    toast("配音覆盖已清除");
+    await loadProviderOverrides();
   } catch (error) { showError(error.message || error); }
 }
 
