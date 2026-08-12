@@ -215,6 +215,11 @@ try {
   if (JSON.stringify(m9After).includes("sk-M9-SECRET") || JSON.stringify(m9After).includes("apiKey")) throw new Error("M9 override 泄露密钥");
   await request(`/api/drama/projects/${created.project.id}/provider-overrides`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clear: ["llm"] }) });
 
+  // ---------- M10：队列守卫 ----------
+  const m10Queue = await request("/api/drama/queue/status");
+  if (!m10Queue.queue || !m10Queue.queue.comfyui) throw new Error("M10 队列状态形状异常");
+  if (m10Queue.queue.comfyui.running < 0 || m10Queue.queue.comfyui.queued < 0) throw new Error("M10 队列计数非法");
+
   console.log(JSON.stringify({
     ok: true,
     service: health.service,
@@ -235,7 +240,8 @@ try {
     providersGuard: provRes.providers.length,
     m8MaterialGuard: m8Img.material.id,
     m8AudioGuard: m8Audio.material.id,
-    m9OverrideGuard: m9Patched.overrides.llm.configured
+    m9OverrideGuard: m9Patched.overrides.llm.configured,
+    m10QueueGuard: m10Queue.queue.comfyui.queued + m10Queue.queue.comfyui.running
   }, null, 2));
 } finally {
   child.kill("SIGTERM");
