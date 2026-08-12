@@ -27,7 +27,7 @@ test("normalizeShot 收敛非法输入并保留首帧状态", () => {
   assert.equal(shot.id, "shot-1");
   assert.equal(shot.camera, "medium");
   assert.equal(shot.durationSec, 15);
-  assert.deepEqual(shot.frame, { status: "ready", file: "a.png", seed: 7, attempts: 2, error: null });
+  assert.deepEqual(shot.frame, { status: "ready", file: "a.png", seed: 7, attempts: 2, error: null, controlnet: { used: null, source: null } });
   const bare = normalizeShot({}, 3);
   assert.equal(bare.id, "shot-4");
   assert.equal(bare.shotType, "cinematic");
@@ -97,7 +97,7 @@ test("store 重启恢复时将孤儿 generating 首帧归一为 failed", () => {
 
 test("normalizeClip 收敛非法输入", () => {
   const bare = normalizeClip();
-  assert.deepEqual(bare, { status: "pending", file: null, provider: null, providerTaskId: null, durationSec: 0, attempts: 0, error: null, audio: { status: "none", file: null, provider: null, error: null } });
+  assert.deepEqual(bare, { status: "pending", file: null, provider: null, providerTaskId: null, durationSec: 0, attempts: 0, error: null, audio: { status: "none", file: null, provider: null, error: null }, voiceRef: { used: null, materialId: null } });
   const clip = normalizeClip({ status: "ready", file: "shot-1-clip-1.mp4", provider: "seedance2", providerTaskId: "t1", durationSec: 99, attempts: 2 });
   assert.equal(clip.status, "ready");
   assert.equal(clip.durationSec, 60); // 钳制上限
@@ -217,4 +217,15 @@ test("M7：场景/道具 refMaterialId、角色 refAudioMaterialId 归一化", (
   assert.equal(a2.characters[0].refAudioMaterialId, null);
   assert.equal(a2.scenes[0].refMaterialId, null);
   assert.equal(a2.props.length, 0);
+});
+
+test("M8：frame.controlnet / clip.voiceRef 归一化", () => {
+  const f = normalizeFrame({ status: "ready", file: "x.png", seed: 1, attempts: 1, controlnet: { used: true, source: "ref" } });
+  assert.deepEqual(f.controlnet, { used: true, source: "ref" });
+  const f2 = normalizeFrame({ status: "pending" });
+  assert.deepEqual(f2.controlnet, { used: null, source: null });
+  const c = normalizeClip({ status: "ready", file: "x.mp4", voiceRef: { used: true, materialId: "mat-1" } });
+  assert.deepEqual(c.voiceRef, { used: true, materialId: "mat-1" });
+  const c2 = normalizeClip({ status: "pending" });
+  assert.deepEqual(c2.voiceRef, { used: null, materialId: null });
 });

@@ -65,3 +65,12 @@ test("索引损坏 → 重建空索引（文件保留）", () => {
   assert.ok(existsSync(join(dataRoot, "materials", img.file))); // 文件仍在
   rmSync(dataRoot, { recursive: true, force: true });
 });
+
+test("getBytes 取素材字节；不存在返回 null", () => {
+  const { store, dataRoot } = setup();
+  const img = store.register({ name: "a", dataUrl: PNG_DATA_URL });
+  const bytes = store.getBytes(img.id);
+  assert.ok(Buffer.isBuffer(bytes) && bytes.length > 0);
+  assert.equal(store.getBytes("mat-00000000-0000-0000-0000-000000000000"), null);
+  rmSync(dataRoot, { recursive: true, force: true });
+});
