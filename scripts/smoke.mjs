@@ -225,6 +225,10 @@ try {
   const m11Export = await fetch(`http://127.0.0.1:${port}/api/drama/projects/${created.project.id}/export/zip`);
   if (m11Export.status !== 409) throw new Error(`M11 export/zip 未合成应返回 409，实际 ${m11Export.status}`);
 
+  // ---------- M12：智能建议守卫 ----------
+  const m12Sug = await request(`/api/drama/projects/${created.project.id}/suggestions`);
+  if (m12Sug.suggestions !== null && !Array.isArray(m12Sug.suggestions.suggestions)) throw new Error("M12 suggestions 形状异常");
+
   console.log(JSON.stringify({
     ok: true,
     service: health.service,
@@ -247,7 +251,8 @@ try {
     m8AudioGuard: m8Audio.material.id,
     m9OverrideGuard: m9Patched.overrides.llm.configured,
     m10QueueGuard: m10Queue.queue.comfyui.queued + m10Queue.queue.comfyui.running,
-    m11ExportGuard: m11Export.status
+    m11ExportGuard: m11Export.status,
+    m12SuggestionGuard: m12Sug.suggestions ? m12Sug.suggestions.suggestions.length : null
   }, null, 2));
 } finally {
   child.kill("SIGTERM");

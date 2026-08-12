@@ -21,7 +21,8 @@ const state = {
   materials: [],            // 素材库列表缓存
   materialKind: "",         // 素材库筛选类型："" | image | audio | video
   providerOverrides: null,   // M9：项目级后端覆盖（脱敏标记）
-  queueStatus: null          // M10：队列状态
+  queueStatus: null,         // M10：队列状态
+  suggestions: null          // M12：智能建议
 };
 
 const RUNNING_STATUSES = ["analyzing", "directing", "prompting", "reviewing"];
@@ -277,6 +278,7 @@ function renderProject() {
   renderVersions(project);
   renderTemplateSelect();
   loadProviderOverrides();
+  loadSuggestions();
   $("#resumeBtn").classList.toggle("hidden", project.status !== "failed");
   $("#genAllFramesBtn").classList.toggle("hidden", !project.gateAConfirmedAt || !project.shots.some((s) => ["pending", "failed"].includes(s.frame.status)));
   $("#genAllClipsBtn").classList.toggle("hidden", !project.gateAConfirmedAt || !project.shots.some((s) => s.frame.status === "confirmed" && !["ready", "confirmed"].includes((s.clip?.status) || "pending")));
@@ -954,6 +956,7 @@ loadSeries();
 loadPromptTemplates();
 loadMaterials();
 loadProviderOverrides();
+loadSuggestions();
 
 // ---------- 平台视图事件绑定 ----------
 $$("#platformTabSeg [data-tab]").forEach((b) => b.addEventListener("click", () => setPlatformTab(b.dataset.tab)));
@@ -964,6 +967,8 @@ if ($("#ovLlmSave")) $("#ovLlmSave").addEventListener("click", saveOvLlm);
 if ($("#ovLlmClear")) $("#ovLlmClear").addEventListener("click", clearOvLlm);
 if ($("#ovVoiceSave")) $("#ovVoiceSave").addEventListener("click", saveOvVoice);
 if ($("#ovVoiceClear")) $("#ovVoiceClear").addEventListener("click", clearOvVoice);
+// ---------- M12：智能建议事件绑定 ----------
+if ($("#regenerateSuggestionsBtn")) $("#regenerateSuggestionsBtn").addEventListener("click", regenerateSuggestions);
 // ---------- 平台：素材库事件绑定 ----------
 $$("#materialKindSeg [data-kind]").forEach((b) => b.addEventListener("click", () => {
   state.materialKind = b.dataset.kind;
@@ -1265,6 +1270,50 @@ async function clearOvVoice() {
     await api(`/api/drama/projects/${state.project.id}/provider-overrides`, { method: "PATCH", body: JSON.stringify({ clear: ["voice"] }) });
     toast("配音覆盖已清除");
     await loadProviderOverrides();
+  } catch (error) { showError(error.message || error); }
+}
+
+// ---------- M12：智能建议 ----------
+async function loadSuggestions() {
+  if (!state.project) return;
+  try {
+    const { data } = await api(`/api/drama/projects/${state.project.id}/suggestions`);
+    state.suggestions = data.suggestions;
+  } catch { state.suggestions = null; }
+  renderSuggestions();
+}
+
+function renderSuggestions() {
+  const box = $("#suggestionList");
+  if (!box) return;
+  const sug = state.suggestions;
+  if (!sug || !sug.suggestions?.length) { box.innerHTML = '<p class="muted">分析后生成；或点「重新分析」</p>'; return; }
+  const labels = { structure: "剧情结构", arc: "角色弧光", dialogue: "台词润色" };
+  const icons = { info: "💡", warn: "⚠" };
+  box.innerHTML = "";
+  for (const cat of ["structure", "arc", "dialogue"]) {
+    const group = sug.suggestions.filter((s) => s.category === cat);
+    if (!group.length) continue;
+    const head = document.createElement("b"); head.style.fontSize = "12px"; head.textContent = labels[cat];
+    box.append(head);
+    for (const s of group) {
+      const row = document.createElement("div"); row.className = "vz-sub-row"; row.style.marginTop = "4px";
+      const icon = document.createElement("span"); icon.textContent = icons[s.severity] || "💡";
+      const target = s.target ? document.createElement("span") : null;
+      if (target) { target.className = "muted"; target.style.fontSize = "11px"; target.textContent = `「${s.target}」`; }
+      const msg = document.createElement("span"); msg.style.fontSize = "12px"; msg.style.flex = "1"; msg.textContent = s.message;
+      row.append(icon, ...(target ? [target] : []), msg);
+      box.append(row);
+    }
+  }
+}
+
+async function regenerateSuggestions() {
+  if (!state.project) return;
+  try {
+    await api(`/api/drama/projects/${state.project.id}/suggestions/regenerate`, { method: "POST" });
+    toast("已触发重新分析", "稍后刷新查看");
+    setTimeout(loadSuggestions, 2000);
   } catch (error) { showError(error.message || error); }
 }
 
