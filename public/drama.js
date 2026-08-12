@@ -20,7 +20,8 @@ const state = {
   activeTemplateId: null,  // 平台视图选中的模板 id
   materials: [],            // 素材库列表缓存
   materialKind: "",         // 素材库筛选类型："" | image | audio | video
-  providerOverrides: null   // M9：项目级后端覆盖（脱敏标记）
+  providerOverrides: null,   // M9：项目级后端覆盖（脱敏标记）
+  queueStatus: null          // M10：队列状态
 };
 
 const RUNNING_STATUSES = ["analyzing", "directing", "prompting", "reviewing"];
@@ -278,6 +279,7 @@ function renderProject() {
   loadProviderOverrides();
   $("#resumeBtn").classList.toggle("hidden", project.status !== "failed");
   $("#genAllFramesBtn").classList.toggle("hidden", !project.gateAConfirmedAt || !project.shots.some((s) => ["pending", "failed"].includes(s.frame.status)));
+  $("#genAllClipsBtn").classList.toggle("hidden", !project.gateAConfirmedAt || !project.shots.some((s) => s.frame.status === "confirmed" && !["ready", "confirmed"].includes((s.clip?.status) || "pending")));
   if (project.status === "failed" && project.pipeline?.error) {
     showError(`流水线在「${project.pipeline.error.stage}」阶段失败：${project.pipeline.error.message}`);
   }
@@ -785,6 +787,26 @@ async function generateAllFrames() {
   }
 }
 
+async function generateAllClips() {
+  const project = state.project;
+  if (!project) return;
+  const pending = project.shots.filter((s) => s.frame.status === "confirmed" && !["ready", "confirmed"].includes((s.clip?.status) || "pending"));
+  if (!pending.length) { toast("没有待生成视频的镜头"); return; }
+  for (const shot of pending) {
+    try { await api(`/api/drama/projects/${project.id}/shots/${shot.id}/clip`, { method: "POST", body: "{}" }); }
+    catch (error) { showError(error.message || error); }
+  }
+  toast("已入队全部视频生成", `${pending.length} 镜`);
+}
+
+// M10：队列状态轮询
+async function loadQueueStatus() {
+  try {
+    const { data } = await api("/api/drama/queue/status");
+    state.queueStatus = data.queue;
+  } catch { state.queueStatus = null; }
+}
+
 async function confirmFrame(project, shotId) {
   try {
     const { data } = await api(`/api/drama/projects/${project.id}/shots/${shotId}/confirm`, { method: "POST", body: "{}" });
@@ -869,6 +891,7 @@ $("#gateABtn").addEventListener("click", openGateAModal);
 $("#gateAConfirm").addEventListener("click", confirmGateA);
 $("#gateACancel").addEventListener("click", closeGateAModal);
 $("#genAllFramesBtn").addEventListener("click", generateAllFrames);
+if ($("#genAllClipsBtn")) $("#genAllClipsBtn").addEventListener("click", generateAllClips);
 $("#projectSelect").addEventListener("change", (event) => {
   if (event.target.value) loadProject(event.target.value);
 });
