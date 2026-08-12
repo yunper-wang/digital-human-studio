@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  createDramaProject, normalizeProject, normalizeAnalysis, normalizeSnapshot, normalizeShot, normalizeFrame, normalizeClip, normalizeCharacter,
+  createDramaProject, normalizeProject, normalizeAnalysis, normalizeSnapshot, normalizeShot, normalizeFrame, normalizeClip, normalizeCharacter, normalizeCompose,
   validateAnalysis, validateDirectedShots, validatePromptedShots, validateReview,
   DEMO_DRAMA_SCRIPT
 } from "../lib/drama/schema.mjs";
@@ -235,4 +235,13 @@ test("M9：project.providerOverrides 归一化（脱敏标记，不存密钥）"
   assert.deepEqual(p1.providerOverrides, { llm: { configured: true, baseUrl: "https://x", model: "y" }, voice: { configured: true } });
   const p2 = normalizeProject({ id: "drama-1", title: "t", script: "s", ratio: "portrait" });
   assert.deepEqual(p2.providerOverrides, { llm: null, voice: null });
+});
+
+test("M11：normalizeCompose cover/meta 归一化", () => {
+  const c = normalizeCompose({ status: "succeeded", file: "final.mp4", srtFile: "film.srt", cover: "cover.png", meta: "meta.json" });
+  assert.equal(c.cover, "cover.png");
+  assert.equal(c.meta, "meta.json");
+  const c2 = normalizeCompose({ status: "idle" });
+  assert.equal(c2.cover, null);
+  assert.equal(c2.meta, null);
 });
