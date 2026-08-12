@@ -594,8 +594,9 @@ const seedanceConfig = {
 
 function allowRequest(ip) {
   const now = Date.now();
+  const limit = Number(process.env.DRAMA_RATE_LIMIT) || 12;
   const current = (rateWindow.get(ip) || []).filter((stamp) => now - stamp < 60_000);
-  if (current.length >= 12) return false;
+  if (current.length >= limit) return false;
   current.push(now);
   rateWindow.set(ip, current);
   return true;

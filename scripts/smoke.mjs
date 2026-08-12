@@ -26,6 +26,7 @@ const child = spawn(process.execPath, ["server.mjs"], {
     DRAMA_LLM_MODEL: "",
     DRAMA_LLM_API_KEY: "",
     DRAMA_LLM_MOCK: "",
+    DRAMA_RATE_LIMIT: "60", // 冒烟守卫密集写入，放宽速率限制
     COMFYUI_URL: "",
     DRAMA_VIDEO_WORKFLOW: "",
     COMFYUI_VIDEO_TIMEOUT_MS: ""
@@ -178,6 +179,22 @@ try {
   const verList = await request(`/api/drama/projects/${created.project.id}/versions`);
   if (!verList.versions.some((v) => v.id === verRes.snapshot.id)) throw new Error("版本列表未含新版本");
 
+  // ---------- M7：提示词模板 + 素材 + providers 守卫 ----------
+  const tplList = await request("/api/drama/prompt-templates");
+  if (!tplList.templates?.some((t) => t.builtin)) throw new Error("内置提示词模板未种子化");
+  const tplRes = await request("/api/drama/prompt-templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "烟雾模板", stages: { review: "你是严格的短剧审核员，只输出 JSON。" } }) });
+  if (!tplRes.template?.id) throw new Error("创建提示词模板失败");
+  const patchedTpl = await request(`/api/drama/projects/${created.project.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ promptTemplateId: tplRes.template.id }) });
+  if (patchedTpl.project.promptTemplateId !== tplRes.template.id) throw new Error("项目选用模板失败");
+  const png1x1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const matRes = await request("/api/drama/materials", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "烟雾素材", dataUrl: `data:image/png;base64,${png1x1}` }) });
+  if (matRes.material?.kind !== "image") throw new Error("登记素材失败");
+  const matStatic = await fetch(`http://127.0.0.1:${port}/materials/${matRes.material.file}`);
+  if (matStatic.status !== 200) throw new Error("素材静态服务失败");
+  const provRes = await request("/api/drama/providers");
+  if (!Array.isArray(provRes.providers) || provRes.providers.length !== 5) throw new Error("providers 聚合形状异常");
+  if (JSON.stringify(provRes).includes("apiKey")) throw new Error("providers 泄露密钥字段");
+
   console.log(JSON.stringify({
     ok: true,
     service: health.service,
@@ -192,7 +209,10 @@ try {
     dramaVideoGate: videoNoBindingBody.errorCode,
     composeGuard: composeBody.errorCode,
     seriesGuard: seriesRes.series.id,
-    versionGuard: verRes.snapshot.id
+    versionGuard: verRes.snapshot.id,
+    promptTemplateGuard: tplRes.template.id,
+    materialGuard: matRes.material.id,
+    providersGuard: provRes.providers.length
   }, null, 2));
 } finally {
   child.kill("SIGTERM");
