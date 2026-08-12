@@ -56,6 +56,8 @@ body.drama-body {
   --warn-line:#f0dfc2;
   --demo:#c99a3a;               /* 演示态点 */
   --off:#c9c5b8;                /* 未配置/离线点 */
+  --mono:ui-monospace,"DM Mono",monospace;
+  --faint:#8f8e85;              /* 最弱 meta 文字（仅 ≥10px 非关键信息） */
   --serif:"Songti SC","Noto Serif SC","STSong",serif;
   --r-card:14px;                /* 卡片圆角 */
   --r-ctl:9px;                  /* 控件圆角 */
@@ -135,7 +137,10 @@ body.drama-body {
 ### 5.7 控件
 - `.vz-btn`：白底 `--border` 边、`--ink-2` 字、radius 9；hover `--soft` 底。
 - `.vz-btn-primary`：墨底纸字；hover 纯黑 `#000`。
-- 朱砂 CTA（新增修饰类 `.vz-btn-red`，仅用于：开始解析、应用修改、确认预算、合成成片）：`--red` 底白字；hover `--red-hover`。HTML 中给这 4 个按钮追加该类。
+- 朱砂 CTA 类 `.vz-btn-red`：`--red` 底白字；hover `--red-hover`。规则置于 `.vz-btn-primary` 之后定义。红色**只**给主行动按钮：
+  - HTML 中 5 个按钮的 class 由 `vz-btn-primary` 替换为 `vz-btn-red`：`#runPipelineBtn`（开始解析）、`#runPipelineBtn2`（重新解析）、`#composeBtn`（合成成片）、`#gateABtn`（确认预算）、`#gateAConfirm`（弹窗·确认并继续）。
+  - 检查器底部「生成视频 / 重新生成视频」是 JS 渲染的 `.vz-apply`（drama.js:630，class 已存在）——**纯 CSS** 置红，零 JS 改动。其下的「确认视频」保持 `.vz-btn-primary` 墨色。
+  - 其余按钮（生成全部首帧/视频、导出、回滚等）一律 ghost / 墨，不用红。
 - `.vz-input` / `.vz-select` / `textarea`：底 `#fbfaf7`、边 `--line-strong`、radius var(--r-ctl)；`:focus-visible` 边 `--ink` + `box-shadow: var(--focus)`。
 - 所有可交互元素 `:focus-visible`：`outline:2px solid var(--red); outline-offset:2px`（键盘可达性）。
 - `input[type=range]`：`accent-color: var(--ink)`。
@@ -144,20 +149,22 @@ body.drama-body {
 
 ### 6.1 剧本（`#viewScript`）
 - 向导卡 `.vz-wizard`：`wiz-num` 圆徽墨底纸字；`wiz-title` 衬线 24px（纯墨色，不加红）；`wiz-input`/`wiz-script` 走 §5.7 控件规范；`wiz-foot` 辅助文字 11.5px。
-- 阶段列表 `.stage-list li`：左侧 16px 状态圆点——完成 `--ok`「✓」/ 运行中 `--red`「●」带脉冲 / 失败 `--danger`「✗」/ 等待 `--soft` 底序号；右侧 `<em>` 元信息 `--muted` 10.5px。（实现时按 `renderStages` 实际写入的 status class 映射；若 JS 无 status class，则保持现状仅改排版，不加状态点——以不增 JS 为准。）
+- 阶段列表 `.stage-list li`：左侧 16px 状态圆点按 `renderStages` **实际写入的 class** 映射（drama.js:309–310 只有两种）：完成（`.done`）`--ok` 底「✓」/ 运行中（`.active`）`--red` 底「●」带脉冲 / 等待（无 class）`--soft` 底灰序号；**失败态无 class 钩子，不加状态点**，仅排版（零 JS 约束）。右侧 `<em>` 元信息 `--muted` 10.5px。
 - 智能建议 `#suggestionList`：条目虚线分隔；若 `renderSuggestions` 输出严重级标识，按 高=朱砂 / 中=琥珀 / 低=灰 圆点映射，否则统一左缘 2px `--border` 竖条。按钮「重新分析」ghost 小按钮。
 
 ### 6.2 资产（`#viewAssets`）
 - `#characterList`：≥1100px 双列网格（`grid-template-columns:1fr 1fr; gap:10px`），<1100px 单列。
-- `.vz-char` 卡：grid `64px 头像列 + 内容列`；头像 64×84 radius 9 带 `--border` 边；角色名 12.5px 700；`.role` 10px `--muted`；绑定行 label 10.5px `--muted` + select 全宽。
-- 场景/道具（`#sceneList` / `#propList`）：chip 风——圆角 8、`#fbfaf7` 底、`--border` 边、11px；使用次数等 meta `--faint` 9.5px。
+- 角色卡选择器为 **`#characterList .character-item`**（drama.js:325；注意 `.vz-char` 是**场景/道具**条目，drama.js:396/432，二者不可混用）。现有 CSS 无 `.character-item` 规则，本期新建。
+- **设计让步（零 JS 约束驱动）**：角色卡 DOM 无 `<img>`（只有 `b`/`span`/`small` + `.bind-row` selects），视觉稿中的真人头像照片需 JS 解析「绑定形象 → 图片」，超出零 JS 约束。降级为 **CSS `::before` 装饰头像**：56×72、radius 9、`--soft` 底 + 人形剪影 SVG data-URI（`--ink` 20% 透明度），全卡统一。真人照片头像列为后续增强（需 JS 改动，不在本期）。
+- 卡内排版：`b`（`名字 · 角色` 同行文本）12.5px 700；`span`（性格）10.5px `--muted`；`small`（外貌）10px `--faint`；`.bind-row` label 10.5px `--muted` + select 全宽；卡片 grid `56px 装饰列 + 内容列`，gap 12。
+- 场景/道具（`#sceneList .vz-char, #propList .vz-char`）：chip 风——圆角 8、`#fbfaf7` 底、`--border` 边、11px；使用次数等 meta `--faint` 9.5px。
 
 ### 6.3 分镜（`#viewStory`，旗舰）
 - `.vz-story` 网格维持 `1fr 320px`。
 - **画廊舞台 `.vz-stage`**：暖灰衬底 `radial-gradient(circle at 50% 0%, #f4f0e7, #e9e4d6 78%)` + 宣纸肌理（内联 SVG feTurbulence data-URI，opacity .5，rect opacity .05）；边框 `#e0dbcd`；radius 12；padding 16。
-- **画框 `.frm`**：`border:7px solid #fff`（白卡装裱）+ `box-shadow: 0 1px 2px rgba(60,50,30,.14), 0 12px 30px rgba(60,50,30,.24)`；radius 6；空态文字 `#b9b4a6`。
-- **铭牌 `.stagetag`**：从左上挪到底部居中——`left:50%; transform:translateX(-50%); bottom:-1px`；墨底纸字 10px，radius 7px 7px 0 0。
-- 字幕 `.sub`：13px 700 白字，`text-shadow: 0 1px 4px rgba(0,0,0,.85), 0 0 2px rgba(0,0,0,.6)`。
+- **画框 `.frm`**：内底 `#151310`；`border:7px solid #fff`（白卡装裱）+ `box-shadow: 0 1px 2px rgba(60,50,30,.14), 0 12px 30px rgba(60,50,30,.24)`；radius 6；空态文字 `#b9b4a6`。
+- **铭牌 `.stagetag`**：从左上挪到底部居中——`left:50%; transform:translateX(-50%); bottom:0`（`.vz-stage` overflow:hidden，不用 -1px 防裁切）；墨底纸字 10px，radius 7px 7px 0 0。
+- 字幕 `.cap`（drama.js:580；现有规则 `#preview .cap`）：13px 700 白字，`text-shadow: 0 1px 4px rgba(0,0,0,.85), 0 0 2px rgba(0,0,0,.6)`。
 - 预览卡标题 `.ph b`：衬线 15px；`#previewMeta` 11px `--muted`。
 - **胶片条**：缩略图 `.vz-th` 84px 高；选中 `border-color: var(--red); box-shadow: 0 0 0 2px rgba(192,69,47,.28)`；徽标 `.bdg` 改中性（白底 92% 墨字），镜型区分改用 1.5px 左竖条（台词=朱砂 / 画面=墨色）；`.dur` 10px 600 白字带影；`.ok` 确认圆点改 `--ok` 底白「✓」；失败边 `--danger`。
 - **检查器 `.vz-insp`**：padding 16px 18px；字段间距 13px；`top:66px` sticky 保持；标题 13.5px 700；`.vz-tabs` 槽式（`--soft` 底，激活白底+轻影）；`.vz-field label` 11px 500 `#5f5e57`；`.vz-seg` 激活墨底；「应用修改」改 `.vz-btn-red`，12.5px 700 radius 10；hint 10.5px `--muted`。
@@ -169,13 +176,14 @@ body.drama-body {
 - 进度条 `.vz-progress`：轨道 `#eceae2`；首帧填充 `--ok`，**视频填充 `--ink`**（视觉稿中红色视频条是有意收敛——红只留 CTA/选中/总额）。
 - 预算单：行 11.5px；合计行上边线 `--border`，金额 mono 700 **`--red`**（视觉稿已确认的红色例外）。
 - 版本行：虚线分隔；「回滚」ghost 小按钮。
-- 字幕行 `.sub-row` 风格：`#fbfaf7` 底 + `--border` 边 + radius 9；时间码 mono 10px `--muted`。
+- 字幕行 `.vz-sub-row`（drama.js:1062）：`#fbfaf7` 底 + `--border` 边 + radius 9；时间码 mono 10px `--muted`。
 
 ### 6.5 平台（`#viewPlatform`）
 - tab 段控 `#platformTabSeg`：槽式，激活墨底。
 - 模板行：虚线分隔；徽标——内置只读 `--red-soft` 底朱砂字 / 使用中 `--soft` 底 `--muted` 字。
 - 素材网格 tile：radius 10 + `--border` 边，hover 上浮 1px + `--sh-card`。
-- **模型状态卡 `#providerGrid > *`**：radius 11；头部 6px 状态点（`--ok`/`--demo`/`--off`）+ 右侧状态胶囊（`.st-ok` `--ok-soft` 底 `--ok` 字 / `.st-demo` `#f7eeda` 底 `#9a7420` 字 / `.st-off` `#efede6` 底 `--faint` 字）；meta 10px `--muted` 1.6 行高。（若 `renderProviderOverrides` 输出的结构不含状态胶囊元素，则只用状态点 + 文字色映射，不加 DOM。）
+- **模型状态卡 `#providerGrid .vz-card`**（由 `loadProviders` 渲染，drama.js:1463，非 renderProviderOverrides）：状态文字色由 JS 内联 `PROVIDER_STATUS_COLOR` 设置——`ready` 用 `var(--ok)`、`missing` 用 `var(--muted)`，均随新令牌自动换色；`degraded` 为硬编码 `#c9a227`，纸底下可读，保留。状态文本自带「●」glyph，无独立圆点/胶囊 DOM 钩子（零 JS 约束下不新增）。本期范围 = **仅卡片外壳**：以一条 `#providerGrid .vz-card { padding:12px !important }` 覆盖其内联 `style.padding`，标题 12.5px、meta 10px `--muted` 1.6 行高。（状态胶囊/状态点为已记录降级；若未来允许 1 行 JS——`card.dataset.status = p.status`——可再启用。）
+- 模板行（`renderTemplateList`）：虚线分隔；「内置」是 label 内文本后缀、「使用中」是行级 `.on` class，均无独立徽标元素——映射为行级样式：`.on` 行左侧 2px `--red` 竖条 + 文本 `--muted`，不新增 DOM。
 
 ### 6.6 弹窗与 toast
 - `.vz-modal` 遮罩：`rgba(36,39,43,.4)`（暖墨遮罩）。
@@ -206,7 +214,7 @@ HTML 中将 `.ic-glyph` 的文本内容替换为 SVG 标记（class 保留，尺
 ## 9. 验证方案
 
 1. **回归**：`npm run check`（含 `public/drama.js` 语法检查）+ `npm test`（unit + smoke）原样通过。
-2. **隔离证明**：`git diff public/drama.js` 仅含步骤条 done class 一行；`git diff public/drama.html` 仅含 SVG 图标、两个语义 class、四个 `.vz-btn-red` 追加。
+2. **隔离证明**：`git diff public/drama.js` 仅含步骤条 done class 一行；`git diff public/drama.html` 仅含：6 处字符画→SVG 替换、2 个语义 class 追加（`vz-g-budget`、`vz-g-gate`）、5 处按钮 class 替换（`vz-btn-primary` → `vz-btn-red`，清单见 §5.7）。
 3. **视觉走查**（浏览器截图 @1440×900，与已确认视觉稿比对）：
    - 空态向导 / 有项目剧本态 / 资产双列 / 分镜画廊（空态+有镜+选中+确认勾）/ 生成双栏 / 平台三 tab / 预算弹窗 / toast（成功+失败）/ banner（演示+错误）。
 4. **对比度抽测**：§3 表格中每行的前景/背景对在浏览器取实际计算值核验。
@@ -226,7 +234,7 @@ HTML 中将 `.ic-glyph` 的文本内容替换为 SVG 标记（class 保留，尺
 3. 剧本视图
 4. 分镜视图（画廊舞台 + 胶片条 + 检查器）
 5. 资产视图
-6. 生成视图（双栏网格 + 两张卡片加 class + 按钮加 `.vz-btn-red`）
+6. 生成视图（双栏网格 + 两张卡片加 class + 5 处按钮 class 替换为 `.vz-btn-red`）
 7. 平台视图
 8. 弹窗 / toast / 状态收尾
 9. §9 验证全跑 + 截图比对
