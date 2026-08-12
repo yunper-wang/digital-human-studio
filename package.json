@@ -3,7 +3,6 @@
   "version": "0.4.3",
   "description": "A privacy-first, local-first desktop workbench that turns a screenplay into a multi-shot AI short drama: LLM storyboarding, character assets, budget gates and per-shot video generation.",
   "type": "module",
-  "main": "desktop.mjs",
   "author": "francoeur003",
   "license": "MIT",
   "repository": {
@@ -12,22 +11,13 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "app": "electron .",
-    "check": "node --check server.mjs && node --check desktop.mjs && node --check lib/drama/schema.mjs && node --check lib/drama/store.mjs && node --check lib/drama/llm.mjs && node --check lib/drama/agents.mjs && node --check lib/drama/budget.mjs && node --check lib/drama/pipeline.mjs && node --check lib/drama/comfyui.mjs && node --check lib/drama/routes.mjs && node --check lib/drama/subtitle.mjs && node --check lib/drama/ffmpeg.mjs && node --check lib/drama/audio.mjs && node --check lib/drama/compose.mjs && node --check lib/drama/series.mjs && node --check lib/drama/version.mjs && node --check lib/drama/prompts.mjs && node --check lib/drama/materials.mjs && node --check lib/drama/queue.mjs && node --check lib/drama/export.mjs && node --check lib/drama/suggestions.mjs && node --check public/drama.js && node --check lib/seedance.mjs && node --check tests/fixtures/fake-seedance-runner.mjs",
+    "check": "node --check server.mjs && node --check lib/drama/schema.mjs && node --check lib/drama/store.mjs && node --check lib/drama/llm.mjs && node --check lib/drama/agents.mjs && node --check lib/drama/budget.mjs && node --check lib/drama/pipeline.mjs && node --check lib/drama/comfyui.mjs && node --check lib/drama/routes.mjs && node --check lib/drama/subtitle.mjs && node --check lib/drama/ffmpeg.mjs && node --check lib/drama/audio.mjs && node --check lib/drama/compose.mjs && node --check lib/drama/series.mjs && node --check lib/drama/version.mjs && node --check lib/drama/prompts.mjs && node --check lib/drama/materials.mjs && node --check lib/drama/queue.mjs && node --check lib/drama/export.mjs && node --check lib/drama/suggestions.mjs && node --check public/drama.js && node --check lib/seedance.mjs && node --check tests/fixtures/fake-seedance-runner.mjs",
     "test:unit": "node --test tests/*.test.mjs",
     "test": "npm run check && npm run test:unit && npm run smoke",
-    "smoke": "node scripts/smoke.mjs",
-    "build:mac": "electron-packager . 'Digital Human Studio' --platform=darwin --arch=arm64 --out=release --overwrite --prune=true --asar --app-bundle-id=studio.zaorenju.desktop --app-category-type=public.app-category.video --app-version=0.4.3 --icon=assets/icon.icns --ignore='^/(release|docs/screenshots|data/outputs|data/uploads|data/seedance-runs|config/avatars\\.json|config/local-voices\\.json|\\.env)$' && codesign --force --deep --sign - 'release/Digital Human Studio-darwin-arm64/Digital Human Studio.app'",
-    "dist:mac": "npm run build:mac && ditto -c -k --sequesterRsrc --keepParent 'release/Digital Human Studio-darwin-arm64/Digital Human Studio.app' 'release/Digital-Human-Studio-0.4.3-macOS-arm64.zip'"
+    "smoke": "node scripts/smoke.mjs"
   },
   "engines": {
     "node": ">=20"
   },
-  "devDependencies": {
-    "@electron/packager": "20.0.4",
-    "electron": "39.8.10"
-  },
-  "allowScripts": {
-    "electron@39.8.10": true
-  }
+  "devDependencies": {}
 }

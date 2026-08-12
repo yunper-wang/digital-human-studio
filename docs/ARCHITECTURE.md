@@ -2,7 +2,6 @@
 
 Digital Human Studio uses a deliberately small local-first architecture.
 
-- `desktop.mjs` starts Electron and points it at an ephemeral loopback port.
 - `server.mjs` serves the UI and owns provider calls, task state and private files.
 - `public/` is a credential-free browser client with no Node.js privileges.
 - `data/` contains user uploads, task state and generated media and is ignored by Git.

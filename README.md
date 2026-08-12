@@ -7,7 +7,6 @@
 [![CI](https://github.com/francoeur003/digital-human-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/francoeur003/digital-human-studio/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-d8ff3e.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node.js-20%2B-6da55f.svg)](https://nodejs.org/)
-[![Electron](https://img.shields.io/badge/Electron-39-47848f.svg)](https://www.electronjs.org/)
 
 </div>
 
@@ -81,11 +80,13 @@ AI 短剧的麻烦往往不在某一个模型，而在剧本、分镜、角色�
 ## 快速开始
 
 ```bash
-git clone https://github.com/francoeur003/digital-human-studio.git
+git clone https://github.com/yunper-wang/digital-human-studio.git
 cd digital-human-studio
 npm install
-npm run app
+npm start
 ```
+
+浏览器打开 `http://127.0.0.1:4199`。
 
 也可以只启动本地 Web 版：
 
@@ -125,20 +126,20 @@ config/local-voices.json
 
 这些文件、`.env`、上传素材、生成结果和任务历史都被 `.gitignore` 强制排除。详见 [安全边界](docs/SECURITY-BOUNDARY.md)。
 
-## 验收与打包
+## 验收
 
 ```bash
 npm test       # 语法检查 + 无费用烟雾测试
-npm run dist:mac
+npm start      # 启动本地服务
 ```
 
-macOS 打包产物会生成在 `release/`。当前为未公证的 Apple silicon 开发包；对外分发前建议配置 Apple Developer ID 签名和 notarization。
+纯 Web B/S 架构：`npm start` 启动 Node 服务，浏览器访问 `http://127.0.0.1:4199`。无桌面客户端依赖。
 
 ## 架构
 
 ```mermaid
 flowchart LR
-  UI["Electron / Browser UI"] --> API["Local Node.js service"]
+  UI["Browser UI"] --> API["Local Node.js service"]
   API --> STORE["Local app data"]
   API -. "user-configured adapter" .-> VIDEO["Video generation provider"]
   API -. "user-configured adapter" .-> VOICE["Voice provider / local voice node"]
