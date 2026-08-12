@@ -10,11 +10,21 @@
   <div class="vz-app">
     <aside class="vz-rail">
       <div class="vz-logo">剧</div>
-      <button class="vz-ic on" data-view="script" title="剧本">▤</button>
-      <button class="vz-ic" data-view="assets" title="资产">◉</button>
-      <button class="vz-ic" data-view="story" title="分镜">▦</button>
-      <button class="vz-ic" data-view="generate" title="生成">▶</button>
-      <button class="vz-ic" data-view="platform" title="平台">⚙</button>
+      <button class="vz-ic on" data-view="script" title="剧本">
+        <span class="ic-glyph">▤</span><span class="ic-label">剧本</span>
+      </button>
+      <button class="vz-ic" data-view="assets" title="资产">
+        <span class="ic-glyph">◉</span><span class="ic-label">资产</span>
+      </button>
+      <button class="vz-ic" data-view="story" title="分镜">
+        <span class="ic-glyph">▦</span><span class="ic-label">分镜</span>
+      </button>
+      <button class="vz-ic" data-view="generate" title="生成">
+        <span class="ic-glyph">▶</span><span class="ic-label">生成</span>
+      </button>
+      <button class="vz-ic" data-view="platform" title="平台">
+        <span class="ic-glyph">⚙</span><span class="ic-label">平台</span>
+      </button>
     </aside>
 
     <div class="vz-main">
@@ -23,13 +33,8 @@
         <div class="r">
           <span class="vz-provider" id="llmStatus"><span class="lg">LL</span>编排模型<i></i></span>
           <span class="vz-provider" id="comfyStatus"><span class="lg">C</span>ComfyUI<i></i></span>
-          <select id="seriesSelect" class="vz-select" style="max-width:180px"><option value="">未分组</option></select>
-          <button class="vz-btn" id="newSeriesBtn">新建剧集</button>
-          <button class="vz-btn hidden" id="assignSeriesBtn">归入剧集</button>
-          <select id="projectSelect" class="vz-select"></select>
-          <button class="vz-btn" id="newProjectBtn">新建</button>
-          <button class="vz-btn" id="demoBtn">演示剧本</button>
-          <button class="vz-btn vz-btn-primary" id="runPipelineBtn">开始解析</button>
+          <select id="projectSelect" class="vz-select" style="max-width:220px"></select>
+          <button class="vz-btn vz-btn-primary" id="newProjectBtn" title="新建项目">+ 新建</button>
         </div>
       </header>
 
@@ -42,48 +47,74 @@
 
         <!-- 剧本视图 -->
         <section class="vz-view" id="viewScript">
-          <div class="vz-card" style="padding:14px">
-            <input id="dramaTitle" class="vz-select" style="width:100%;max-width:none" maxlength="80" placeholder="短剧标题" />
-            <textarea id="dramaScript" spellcheck="false" placeholder="粘贴或输入短剧剧本（50–20000 字）…" style="width:100%;min-height:260px;margin-top:10px;border:1px solid var(--border);border-radius:9px;padding:10px"></textarea>
-            <div style="display:flex;justify-content:space-between;margin-top:8px"><span class="muted" id="dramaCharCount">0 字</span><span class="muted" id="projectStatus">未开始</span></div>
+          <!-- 空状态向导：无项目时引导 -->
+          <div class="vz-card vz-wizard" id="emptyWizard">
+            <div class="wiz-num">1</div>
+            <h2 class="wiz-title">从这里开始你的短剧</h2>
+            <p class="wiz-sub">粘贴一段剧本，让 AI 导演帮你拆成分镜表。</p>
+            <input id="dramaTitle" class="vz-input wiz-input" maxlength="80" placeholder="给你的短剧起个名字…" />
+            <textarea id="dramaScript" spellcheck="false" class="wiz-script" placeholder="在这里粘贴剧本（50–20000 字）…&#10;&#10;不知道写什么？点下面的「用演示剧本」一键填充示例。"></textarea>
+            <div class="wiz-foot">
+              <span class="muted" id="dramaCharCount">0 字</span>
+              <span class="muted" id="projectStatus">未开始</span>
+              <button class="vz-btn" id="demoBtn">用演示剧本</button>
+              <button class="vz-btn vz-btn-primary" id="runPipelineBtn" disabled>开始解析 →</button>
+            </div>
           </div>
+
+          <!-- 有项目后：剧本卡 + 高级选项折叠 -->
+          <div class="vz-card vz-script-editor hidden" id="scriptEditor" style="padding:14px">
+            <input id="dramaTitle2" class="vz-input" style="width:100%" maxlength="80" placeholder="短剧标题" oninput="document.getElementById('dramaTitle').value=this.value;document.getElementById('dramaTitle').dispatchEvent(new Event('input'))" />
+            <textarea id="dramaScript2" spellcheck="false" style="width:100%;min-height:180px;margin-top:10px;border:1px solid var(--border);border-radius:9px;padding:10px" placeholder="粘贴或输入短剧剧本…" oninput="document.getElementById('dramaScript').value=this.value;document.getElementById('dramaScript').dispatchEvent(new Event('input'))"></textarea>
+            <div style="display:flex;justify-content:space-between;margin-top:8px"><span class="muted" id="dramaCharCount2">0 字</span><span class="muted" id="projectStatus2">未开始</span></div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="vz-btn vz-btn-primary" id="runPipelineBtn2">开始解析</button>
+              <button class="vz-btn" id="demoBtn2">用演示剧本</button>
+            </div>
+          </div>
+
           <div class="vz-card" style="padding:14px">
-            <b style="font-size:13px">编排流水线</b>
-            <ol class="stage-list" id="stageList" style="list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:6px">
-              <li data-stage="analyze">剧本分析 <em class="muted"></em></li>
-              <li data-stage="direct">导演分镜 <em class="muted"></em></li>
-              <li data-stage="prompt">提示词 <em class="muted"></em></li>
-              <li data-stage="review">文本审核 <em class="muted"></em></li>
-            </ol>
-            <button class="vz-btn hidden" id="resumeBtn" style="margin-top:10px">从失败阶段续跑</button>
-            <div class="vz-rowline" style="margin-top:10px">
-              <span class="muted">提示词模板</span>
-              <select id="promptTemplateSelect" class="vz-select" style="max-width:220px"></select>
-            </div>
-            <div class="vz-rowline" style="margin-top:10px">
-              <b style="font-size:13px">后端覆盖</b>
-              <span class="muted" id="providerOverrideHint">未配置时走默认（.env）</span>
-            </div>
-            <div class="vz-rowline" style="margin-top:6px">
-              <input id="ovLlmBaseUrl" type="text" placeholder="LLM base_url（可选）" class="vz-input" style="max-width:200px" />
-              <input id="ovLlmModel" type="text" placeholder="model（可选）" class="vz-input" style="max-width:140px" />
-              <input id="ovLlmApiKey" type="password" placeholder="api_key（可选）" class="vz-input" style="max-width:160px" />
-              <button class="vz-btn" id="ovLlmSave">保存 LLM</button>
-              <button class="vz-btn" id="ovLlmClear">清除</button>
-            </div>
-            <div class="vz-rowline" style="margin-top:6px">
-              <input id="ovVoiceKey" type="password" placeholder="ElevenLabs key（可选）" class="vz-input" style="max-width:220px" />
-              <button class="vz-btn" id="ovVoiceSave">保存配音</button>
-              <button class="vz-btn" id="ovVoiceClear">清除</button>
-            </div>
-            <p class="muted" style="margin-top:6px;font-size:11px">密钥仅存本机，永不回显；切换只影响后续发起的流水线/口播。</p>
+            <details class="vz-advanced">
+              <summary>编排流水线 & 高级选项</summary>
+              <ol class="stage-list" id="stageList" style="list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:6px">
+                <li data-stage="analyze">剧本分析 <em class="muted"></em></li>
+                <li data-stage="direct">导演分镜 <em class="muted"></em></li>
+                <li data-stage="prompt">提示词 <em class="muted"></em></li>
+                <li data-stage="review">文本审核 <em class="muted"></em></li>
+              </ol>
+              <button class="vz-btn hidden" id="resumeBtn" style="margin-top:10px">从失败阶段续跑</button>
+              <div class="vz-rowline" style="margin-top:10px">
+                <span class="muted">提示词模板</span>
+                <select id="promptTemplateSelect" class="vz-select" style="max-width:220px"></select>
+              </div>
+              <div class="vz-rowline" style="margin-top:10px">
+                <b style="font-size:13px">后端覆盖</b>
+                <span class="muted" id="providerOverrideHint">未配置时走默认（.env）</span>
+              </div>
+              <div class="vz-rowline" style="margin-top:6px">
+                <input id="ovLlmBaseUrl" type="text" placeholder="LLM base_url（可选）" class="vz-input" style="max-width:200px" />
+                <input id="ovLlmModel" type="text" placeholder="model（可选）" class="vz-input" style="max-width:140px" />
+                <input id="ovLlmApiKey" type="password" placeholder="api_key（可选）" class="vz-input" style="max-width:160px" />
+                <button class="vz-btn" id="ovLlmSave">保存 LLM</button>
+                <button class="vz-btn" id="ovLlmClear">清除</button>
+              </div>
+              <div class="vz-rowline" style="margin-top:6px">
+                <input id="ovVoiceKey" type="password" placeholder="ElevenLabs key（可选）" class="vz-input" style="max-width:220px" />
+                <button class="vz-btn" id="ovVoiceSave">保存配音</button>
+                <button class="vz-btn" id="ovVoiceClear">清除</button>
+              </div>
+              <p class="muted" style="margin-top:6px;font-size:11px">密钥仅存本机，永不回显；切换只影响后续发起的流水线/口播。</p>
+            </details>
           </div>
           <div class="vz-card" style="padding:14px;margin-top:12px" id="suggestionCard">
-            <div class="vz-rowline">
-              <b style="font-size:13px">智能建议</b>
-              <button class="vz-btn" id="regenerateSuggestionsBtn">重新分析</button>
-            </div>
-            <div id="suggestionList" style="margin-top:8px"><p class="muted">分析后生成</p></div>
+            <details class="vz-advanced" open>
+              <summary>智能建议</summary>
+              <div class="vz-rowline" style="margin-top:8px">
+                <b style="font-size:13px">剧本改进点</b>
+                <button class="vz-btn" id="regenerateSuggestionsBtn">重新分析</button>
+              </div>
+              <div id="suggestionList" style="margin-top:8px"><p class="muted">分析后生成</p></div>
+            </details>
           </div>
         </section>
 

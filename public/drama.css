@@ -117,6 +117,36 @@ body.drama-body .muted { color:var(--muted); font-size:12px; }
 .vz-toast.error { border-color:#f3c1be; } .vz-toast.success { border-color:#b7e2c8; }
 @media (max-width:1100px) { .vz-story { grid-template-columns:1fr; } .vz-insp { position:static; } }
 
+/* M-UI：侧栏图标带文字、首屏向导、折叠面板 */
+.vz-rail { width:96px !important; }
+.vz-ic { width:80px !important; height:54px !important; border-radius:12px !important; display:flex !important; flex-direction:column; gap:2px; font-size:16px; }
+.vz-ic .ic-glyph { font-size:18px; line-height:1; }
+.vz-ic .ic-label { font-size:11px; font-weight:500; line-height:1; }
+.vz-ic.on .ic-label { font-weight:700; }
+
+/* 首屏向导卡 */
+.vz-wizard { padding:32px 28px !important; max-width:680px; margin:24px auto; }
+.vz-wizard .wiz-num { width:32px; height:32px; border-radius:50%; background:var(--primary); color:#fff; display:grid; place-items:center; font-weight:800; font-size:14px; margin-bottom:14px; }
+.vz-wizard .wiz-title { font-size:22px; font-weight:700; margin:0 0 6px; color:var(--text); }
+.vz-wizard .wiz-sub { color:var(--muted); font-size:13px; margin:0 0 20px; }
+.vz-wizard .wiz-input { width:100%; font-size:14px; padding:10px 12px; }
+.vz-wizard .wiz-script { width:100%; min-height:220px; margin-top:10px; border:1px solid var(--border); border-radius:10px; padding:12px; font-size:13px; line-height:1.6; resize:vertical; }
+.vz-wizard .wiz-foot { display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap; }
+.vz-wizard .wiz-foot .muted { font-size:11px; }
+.vz-wizard .wiz-foot .vz-btn-primary { margin-left:auto; padding:10px 22px; font-size:13px; }
+.vz-wizard .wiz-foot .vz-btn-primary:disabled { opacity:.4; }
+
+/* 折叠面板 */
+.vz-advanced > summary { cursor:pointer; font-weight:600; font-size:13px; padding:4px 0; user-select:none; list-style:none; }
+.vz-advanced > summary::before { content:"▸ "; color:var(--muted); font-size:11px; }
+.vz-advanced[open] > summary::before { content:"▾ "; }
+.vz-advanced > summary::-webkit-details-marker { display:none; }
+
+/* 顶栏简化后留白 */
+.vz-topbar .r { gap:8px; }
+.vz-input { border:1px solid var(--border); background:#fff; border-radius:9px; padding:8px 10px; font-size:12px; }
+
+
 /* M5 合成导出 */
 #composePreview video { width:100%; max-height:320px; border-radius:10px; background:#000; display:block; }
 #exportBar a.vz-btn { text-decoration:none; display:inline-block; }

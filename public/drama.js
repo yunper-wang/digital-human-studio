@@ -258,7 +258,17 @@ function renderProjHead(project) {
 
 function renderProject() {
   const project = state.project;
-  if (!project) return;
+  // M-UI：无项目显示向导，有项目显示编辑器
+  const wizard = $("#emptyWizard");
+  const editor = $("#scriptEditor");
+  if (wizard) wizard.classList.toggle("hidden", Boolean(project));
+  if (editor) editor.classList.toggle("hidden", !project);
+  if (!project) {
+    showError(null);
+    renderProjHead(null);
+    renderStepper();
+    return;
+  }
   showError(null);
   $("#dramaTitle").value = project.title;
   if (document.activeElement !== $("#dramaScript")) $("#dramaScript").value = project.script;
@@ -888,6 +898,7 @@ function schedulePoll(immediate = false) {
 
 $$(".vz-ic[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 $("#runPipelineBtn").addEventListener("click", runPipeline);
+if ($("#runPipelineBtn2")) $("#runPipelineBtn2").addEventListener("click", runPipeline);
 $("#resumeBtn").addEventListener("click", runPipeline);
 $("#gateABtn").addEventListener("click", openGateAModal);
 $("#gateAConfirm").addEventListener("click", confirmGateA);
@@ -919,6 +930,7 @@ $("#newProjectBtn").addEventListener("click", () => {
   setView("script");
   showError(null);
 });
+// M-UI：剧集相关元素已从顶栏移除（移到资产视图），用 ?. 兼容
 if ($("#newSeriesBtn")) $("#newSeriesBtn").addEventListener("click", createSeries);
 if ($("#assignSeriesBtn")) $("#assignSeriesBtn").addEventListener("click", assignToSeries);
 if ($("#seriesSelect")) $("#seriesSelect").addEventListener("change", (event) => {
@@ -929,15 +941,26 @@ $$("#assetScopeSeg [data-scope]").forEach((b) => b.addEventListener("click", () 
   state.assetView = b.dataset.scope;
   if (state.project) renderAssetView(state.project);
 }));
-$("#demoBtn").addEventListener("click", async () => {
+// M-UI：向导卡内的演示剧本按钮 + 字数联动启用开始解析
+const demoFn = async () => {
   const { data } = await api("/api/drama/demo");
   $("#dramaScript").value = data.script;
   $("#dramaTitle").value = "雨夜便利店";
-  $("#dramaCharCount").textContent = `${data.script.replace(/\s/g, "").length} 字`;
-});
+  updateWizardState();
+};
+$("#demoBtn").addEventListener("click", demoFn);
+if ($("#demoBtn2")) $("#demoBtn2").addEventListener("click", demoFn);
+// M-UI：字数≥50 时启用开始解析按钮
+function updateWizardState() {
+  const len = $("#dramaScript").value.replace(/\s/g, "").length;
+  const run = $("#runPipelineBtn");
+  if (run) run.disabled = len < 50;
+}
 $("#dramaScript").addEventListener("input", () => {
   $("#dramaCharCount").textContent = `${$("#dramaScript").value.replace(/\s/g, "").length} 字`;
+  updateWizardState();
 });
+if ($("#dramaTitle")) $("#dramaTitle").addEventListener("input", () => { $("#projectStatus").textContent = "未开始"; });
 
 async function loadCatalogs() {
   try {
