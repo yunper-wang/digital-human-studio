@@ -6,9 +6,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDramaStore } from "../lib/drama/store.mjs";
-import { createDramaProject, normalizeShot, normalizeCharacter, normalizeClip, DEMO_DRAMA_SCRIPT } from "../lib/drama/schema.mjs";
-import { generateShotClip } from "../lib/drama/routes.mjs";
+import { createDramaProject, normalizeShot, normalizeCharacter, normalizeClip, normalizeAnalysis, DEMO_DRAMA_SCRIPT } from "../lib/drama/schema.mjs";
+import { generateShotClip, generateShotVoice } from "../lib/drama/routes.mjs";
 import { getComfyuiConfig } from "../lib/drama/comfyui.mjs";
+import { createMaterialStore } from "../lib/drama/materials.mjs";
+
+const MP3_DATA_URL = `data:audio/mpeg;base64,${Buffer.from([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]).toString("base64")}`;
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-seedance-runner.mjs", import.meta.url));
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -111,4 +114,36 @@ test("剧情镜：模板 + 上传 + 生成 + 落盘", async () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("M8：口播注入参考音频→clip.voiceRef.used=true；缺失降级 used=false", async () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), "drama-m8v-"));
+  const store = createDramaStore(dataRoot);
+  const project = store.save(createDramaProject({ title: "t", script: DEMO_DRAMA_SCRIPT }));
+  store.update(project.id, (p) => {
+    p.analysis = normalizeAnalysis({ synopsis: "s", genre: "g", characters: [{ id: "char-1", name: "n", appearance: "a", avatarId: "av1", voiceId: "v1" }], scenes: [], props: [] });
+    if (!p.shots.length) p.shots = [normalizeShot({ id: "shot-1", shotType: "dialogue", characterIds: ["char-1"], dialogue: "你好世界", durationSec: 3, audioMode: "voice" }, 0)];
+    p.gateAConfirmedAt = new Date().toISOString();
+  });
+  const materialStore = createMaterialStore(dataRoot);
+  const audio = materialStore.register({ name: "参考音", dataUrl: MP3_DATA_URL });
+  store.update(project.id, (p) => { p.analysis.characters[0].refAudioMaterialId = audio.id; });
+  const ctx = {
+    sendJson: (r, s, b) => r.sendJson(s, b), envelope: (ok, d, o = {}) => ({ ok, ...(ok ? { data: d } : { errorCode: o.errorCode, message: o.message }) }), readJson: async (r) => JSON.parse(r.body || "{}"), allowRequest: () => true,
+    store, materialStore,
+    findAvatar: (id) => id === "av1" ? { id: "av1" } : null,
+    findVoice: (id) => id === "v1" ? { id: "v1", provider: "elevenlabs" } : null,
+    audioDeps: { elevenKey: "sk-x", fetchImpl: async () => ({ ok: true, arrayBuffer: async () => Buffer.alloc(800) }) },
+    comfyConfig: {}, pricing: {}, seedanceStatus: () => ({ connected: false }), seedanceConfig: {}, controlnetConfig: null
+  };
+  await generateShotVoice(ctx, project.id, project.shots[0].id);
+  const shot = store.get(project.id).shots[0];
+  assert.equal(shot.clip.audio.status, "ready");
+  assert.equal(shot.clip.voiceRef.used, true);
+  assert.equal(shot.clip.voiceRef.materialId, audio.id);
+  // 删素材后重生成 → 降级
+  materialStore.remove(audio.id);
+  await generateShotVoice(ctx, project.id, project.shots[0].id);
+  assert.equal(store.get(project.id).shots[0].clip.voiceRef.used, false);
+  rmSync(dataRoot, { recursive: true, force: true });
 });
