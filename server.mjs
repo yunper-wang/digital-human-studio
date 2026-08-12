@@ -10,6 +10,7 @@ import { handleDramaApi } from "./lib/drama/routes.mjs";
 import { createSeriesStore } from "./lib/drama/series.mjs";
 import { createPromptStore } from "./lib/drama/prompts.mjs";
 import { createMaterialStore } from "./lib/drama/materials.mjs";
+import { createProviderOverrideStore } from "./lib/drama/provider-overrides.mjs";
 import { getDramaLlmConfig, dramaLlmStatus } from "./lib/drama/llm.mjs";
 import { getComfyuiConfig, getComfyuiStatus, loadVideoWorkflowTemplate, loadControlnetConfig } from "./lib/drama/comfyui.mjs";
 import { getDramaPricing } from "./lib/drama/budget.mjs";
@@ -730,6 +731,7 @@ async function handleApi(request, response, url) {
       seriesStore: createSeriesStore(dataRoot),
       promptStore: createPromptStore(dataRoot),
       materialStore: createMaterialStore(dataRoot),
+      providerOverrideStore: createProviderOverrideStore(dataRoot),
       llmDeps: { config: dramaLlmConfig },
       comfyConfig: comfyuiConfig,
       controlnetConfig: loadControlnetConfig(),

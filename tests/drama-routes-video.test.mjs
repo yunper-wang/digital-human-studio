@@ -10,6 +10,7 @@ import { createDramaProject, normalizeShot, normalizeCharacter, normalizeClip, n
 import { generateShotClip, generateShotVoice } from "../lib/drama/routes.mjs";
 import { getComfyuiConfig } from "../lib/drama/comfyui.mjs";
 import { createMaterialStore } from "../lib/drama/materials.mjs";
+import { createProviderOverrideStore } from "../lib/drama/provider-overrides.mjs";
 
 const MP3_DATA_URL = `data:audio/mpeg;base64,${Buffer.from([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]).toString("base64")}`;
 
@@ -145,5 +146,30 @@ test("M8：口播注入参考音频→clip.voiceRef.used=true；缺失降级 use
   materialStore.remove(audio.id);
   await generateShotVoice(ctx, project.id, project.shots[0].id);
   assert.equal(store.get(project.id).shots[0].clip.voiceRef.used, false);
+  rmSync(dataRoot, { recursive: true, force: true });
+});
+
+test("M9：口播按项目 override 覆盖 elevenKey", async () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), "drama-m9v-"));
+  const store = createDramaStore(dataRoot);
+  const project = store.save(createDramaProject({ title: "t", script: DEMO_DRAMA_SCRIPT }));
+  store.update(project.id, (p) => {
+    p.analysis = normalizeAnalysis({ synopsis: "s", genre: "g", characters: [{ id: "char-1", name: "n", appearance: "a", avatarId: "av1", voiceId: "v1" }], scenes: [], props: [] });
+    if (!p.shots.length) p.shots = [normalizeShot({ id: "shot-1", shotType: "dialogue", characterIds: ["char-1"], dialogue: "你好", durationSec: 3, audioMode: "voice" }, 0)];
+    p.gateAConfirmedAt = new Date().toISOString();
+  });
+  const providerOverrideStore = createProviderOverrideStore(dataRoot);
+  providerOverrideStore.save(project.id, { voice: { elevenKey: "sk-OVERRIDE" } });
+  let capturedKey = null;
+  const ctx = {
+    sendJson: (r, s, b) => r.sendJson(s, b), envelope: (ok, d, o = {}) => ({ ok, ...(ok ? { data: d } : { errorCode: o.errorCode, message: o.message }) }), readJson: async (r) => JSON.parse(r.body || "{}"), allowRequest: () => true,
+    store, providerOverrideStore,
+    findAvatar: (id) => id === "av1" ? { id: "av1" } : null,
+    findVoice: (id) => id === "v1" ? { id: "v1", provider: "elevenlabs" } : null,
+    audioDeps: { elevenKey: "sk-DEFAULT", fetchImpl: async (url, opts) => { capturedKey = opts.headers["xi-api-key"]; return { ok: true, arrayBuffer: async () => Buffer.alloc(800) }; } },
+    comfyConfig: {}, pricing: {}, seedanceStatus: () => ({ connected: false }), seedanceConfig: {}, controlnetConfig: null
+  };
+  await generateShotVoice(ctx, project.id, project.shots[0].id);
+  assert.equal(capturedKey, "sk-OVERRIDE"); // override 覆盖了默认
   rmSync(dataRoot, { recursive: true, force: true });
 });

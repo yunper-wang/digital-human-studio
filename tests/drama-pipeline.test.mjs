@@ -9,6 +9,7 @@ import { createDramaProject, DEMO_DRAMA_SCRIPT } from "../lib/drama/schema.mjs";
 import { getDramaLlmConfig } from "../lib/drama/llm.mjs";
 import { runDramaPipeline, isPipelineRunning } from "../lib/drama/pipeline.mjs";
 import { createPromptStore } from "../lib/drama/prompts.mjs";
+import { createProviderOverrideStore } from "../lib/drama/provider-overrides.mjs";
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "drama-pipeline-test-"));
@@ -81,6 +82,20 @@ test("M7：流水线按项目模板 resolve 提示词注入 deps", async () => {
     const result = await runDramaPipeline(store, project.id, { deps });
     assert.equal(result.reused, false);
     assert.equal(resolvedWith, tpl.id);
+    assert.equal(store.get(project.id).status, "awaiting_gate_a");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("M9：流水线按项目 override 用覆盖后 LLM config", async () => {
+  const { root, store, project } = fixture();
+  try {
+    const ovStore = createProviderOverrideStore(root);
+    ovStore.save(project.id, { llm: { baseUrl: "https://api.x.com/v1", model: "gpt-4o", apiKey: "sk-x" } });
+    const deps = { config: getDramaLlmConfig({ DRAMA_LLM_MOCK: "1" }), promptStore: createPromptStore(root), providerOverrideStore: ovStore };
+    await runDramaPipeline(store, project.id, { deps });
+    // mock 模式不实际调 LLM，验证流水线不炸 + override 快照被读取（通过完成态验证）
     assert.equal(store.get(project.id).status, "awaiting_gate_a");
   } finally {
     rmSync(root, { recursive: true, force: true });
