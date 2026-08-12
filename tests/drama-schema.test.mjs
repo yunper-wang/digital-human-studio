@@ -229,3 +229,10 @@ test("M8：frame.controlnet / clip.voiceRef 归一化", () => {
   const c2 = normalizeClip({ status: "pending" });
   assert.deepEqual(c2.voiceRef, { used: null, materialId: null });
 });
+
+test("M9：project.providerOverrides 归一化（脱敏标记，不存密钥）", () => {
+  const p1 = normalizeProject({ id: "drama-1", title: "t", script: "s", ratio: "portrait", providerOverrides: { llm: { configured: true, baseUrl: "https://x", model: "y" }, voice: { configured: true } } });
+  assert.deepEqual(p1.providerOverrides, { llm: { configured: true, baseUrl: "https://x", model: "y" }, voice: { configured: true } });
+  const p2 = normalizeProject({ id: "drama-1", title: "t", script: "s", ratio: "portrait" });
+  assert.deepEqual(p2.providerOverrides, { llm: null, voice: null });
+});
