@@ -1,7 +1,7 @@
 // tests/drama-llm.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getDramaLlmConfig, callDramaLlm, extractJson, dramaLlmStatus } from "../lib/drama/llm.mjs";
+import { getDramaLlmConfig, callDramaLlm, extractJson, dramaLlmStatus, resolveLlmConfig } from "../lib/drama/llm.mjs";
 import { runScriptAnalysis, runPromptWriting } from "../lib/drama/agents.mjs";
 import { DEMO_DRAMA_SCRIPT } from "../lib/drama/schema.mjs";
 
@@ -68,4 +68,18 @@ test("M6：mock 分析产出场景/道具外观，prompt 注入场景/道具外�
   const fp = shots[0].fluxPrompt;
   assert.ok(fp.includes(analysis.scenes[0].appearance));   // 场景外观已注入
   assert.ok(fp.includes(analysis.props[0].appearance));    // 关联道具外观已注入
+});
+
+test("M9：resolveLlmConfig override 完整 → 覆盖；不完整 → 走 env", () => {
+  const envConfig = { mock: false, baseUrl: "https://env.com/v1", model: "env-model", apiKey: "env-key", timeoutMs: 1000, maxRetries: 2 };
+  const ov = { llm: { baseUrl: "https://api.x.com/v1", model: "gpt-4o", apiKey: "sk-x" } };
+  const resolved = resolveLlmConfig(envConfig, ov);
+  assert.equal(resolved.baseUrl, "https://api.x.com/v1");
+  assert.equal(resolved.model, "gpt-4o");
+  assert.equal(resolved.apiKey, "sk-x");
+  assert.equal(resolved.mock, false);
+  assert.equal(resolved.timeoutMs, 1000); // env 字段保留
+  // 不完整 → 走 env
+  assert.deepEqual(resolveLlmConfig(envConfig, { llm: { baseUrl: "", model: "y", apiKey: "z" } }), envConfig);
+  assert.deepEqual(resolveLlmConfig(envConfig, null), envConfig);
 });
