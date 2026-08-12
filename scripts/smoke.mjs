@@ -195,6 +195,17 @@ try {
   if (!Array.isArray(provRes.providers) || provRes.providers.length !== 5) throw new Error("providers 聚合形状异常");
   if (JSON.stringify(provRes).includes("apiKey")) throw new Error("providers 泄露密钥字段");
 
+  // ---------- M8：素材引用注入守卫 ----------
+  // smoke 环境 ComfyUI/ElevenLabs 不可用，守卫只验证素材登记 + 挂引用端点不炸（实际注入靠单元测试覆盖）
+  const m8Img = await request("/api/drama/materials", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "M8参考图", dataUrl: `data:image/png;base64,${png1x1}` }) });
+  if (m8Img.material?.kind !== "image") throw new Error("M8 参考图登记失败");
+  if (created.project.analysis?.scenes?.length) {
+    const m8Patched = await request(`/api/drama/projects/${created.project.id}/analysis/assets`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenes: [{ id: created.project.analysis.scenes[0].id, refMaterialId: m8Img.material.id }] }) });
+    if (!m8Patched.project) throw new Error("M8 挂参考图失败");
+  }
+  const m8Audio = await request("/api/drama/materials", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "M8参考音", dataUrl: `data:audio/mpeg;base64,${Buffer.from([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]).toString("base64")}` }) });
+  if (m8Audio.material?.kind !== "audio") throw new Error("M8 参考音频登记失败");
+
   console.log(JSON.stringify({
     ok: true,
     service: health.service,
@@ -212,7 +223,9 @@ try {
     versionGuard: verRes.snapshot.id,
     promptTemplateGuard: tplRes.template.id,
     materialGuard: matRes.material.id,
-    providersGuard: provRes.providers.length
+    providersGuard: provRes.providers.length,
+    m8MaterialGuard: m8Img.material.id,
+    m8AudioGuard: m8Audio.material.id
   }, null, 2));
 } finally {
   child.kill("SIGTERM");
