@@ -220,6 +220,11 @@ try {
   if (!m10Queue.queue || !m10Queue.queue.comfyui) throw new Error("M10 队列状态形状异常");
   if (m10Queue.queue.comfyui.running < 0 || m10Queue.queue.comfyui.queued < 0) throw new Error("M10 队列计数非法");
 
+  // ---------- M11：成片导出守卫 ----------
+  // compose 在 smoke 环境因 ComfyUI 不可用不会成功，守卫只验证未合成时 export/zip 返回 409 不炸
+  const m11Export = await fetch(`http://127.0.0.1:${port}/api/drama/projects/${created.project.id}/export/zip`);
+  if (m11Export.status !== 409) throw new Error(`M11 export/zip 未合成应返回 409，实际 ${m11Export.status}`);
+
   console.log(JSON.stringify({
     ok: true,
     service: health.service,
@@ -241,7 +246,8 @@ try {
     m8MaterialGuard: m8Img.material.id,
     m8AudioGuard: m8Audio.material.id,
     m9OverrideGuard: m9Patched.overrides.llm.configured,
-    m10QueueGuard: m10Queue.queue.comfyui.queued + m10Queue.queue.comfyui.running
+    m10QueueGuard: m10Queue.queue.comfyui.queued + m10Queue.queue.comfyui.running,
+    m11ExportGuard: m11Export.status
   }, null, 2));
 } finally {
   child.kill("SIGTERM");
