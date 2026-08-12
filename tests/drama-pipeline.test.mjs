@@ -10,6 +10,7 @@ import { getDramaLlmConfig } from "../lib/drama/llm.mjs";
 import { runDramaPipeline, isPipelineRunning } from "../lib/drama/pipeline.mjs";
 import { createPromptStore } from "../lib/drama/prompts.mjs";
 import { createProviderOverrideStore } from "../lib/drama/provider-overrides.mjs";
+import { createSuggestionStore } from "../lib/drama/suggestions.mjs";
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "drama-pipeline-test-"));
@@ -97,6 +98,19 @@ test("M9：流水线按项目 override 用覆盖后 LLM config", async () => {
     await runDramaPipeline(store, project.id, { deps });
     // mock 模式不实际调 LLM，验证流水线不炸 + override 快照被读取（通过完成态验证）
     assert.equal(store.get(project.id).status, "awaiting_gate_a");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("M12：analyze 完成后流水线不炸（suggestionStore 可选）", async () => {
+  const { root, store, project } = fixture();
+  try {
+    const suggestionStore = createSuggestionStore(root);
+    const deps = { config: getDramaLlmConfig({ DRAMA_LLM_MOCK: "1" }), promptStore: createPromptStore(root), suggestionStore };
+    await runDramaPipeline(store, project.id, { deps });
+    assert.equal(store.get(project.id).status, "awaiting_gate_a");
+    assert.ok(store.get(project.id).analysis);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
