@@ -11,7 +11,7 @@ import { createSeriesStore } from "./lib/drama/series.mjs";
 import { createPromptStore } from "./lib/drama/prompts.mjs";
 import { createMaterialStore } from "./lib/drama/materials.mjs";
 import { getDramaLlmConfig, dramaLlmStatus } from "./lib/drama/llm.mjs";
-import { getComfyuiConfig, getComfyuiStatus, loadVideoWorkflowTemplate } from "./lib/drama/comfyui.mjs";
+import { getComfyuiConfig, getComfyuiStatus, loadVideoWorkflowTemplate, loadControlnetConfig } from "./lib/drama/comfyui.mjs";
 import { getDramaPricing } from "./lib/drama/budget.mjs";
 import { detectFfmpeg } from "./lib/drama/ffmpeg.mjs";
 
@@ -732,6 +732,7 @@ async function handleApi(request, response, url) {
       materialStore: createMaterialStore(dataRoot),
       llmDeps: { config: dramaLlmConfig },
       comfyConfig: comfyuiConfig,
+      controlnetConfig: loadControlnetConfig(),
       pricing: dramaPricing,
       seedanceConfig,
       seedanceStatus: getSeedanceStatus,

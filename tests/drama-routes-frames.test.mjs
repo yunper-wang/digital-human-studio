@@ -5,12 +5,15 @@ import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDramaStore } from "../lib/drama/store.mjs";
-import { createDramaProject, normalizeShot, normalizeClip, DEMO_DRAMA_SCRIPT } from "../lib/drama/schema.mjs";
+import { createDramaProject, normalizeShot, normalizeClip, normalizeAnalysis, DEMO_DRAMA_SCRIPT } from "../lib/drama/schema.mjs";
 import { getDramaLlmConfig } from "../lib/drama/llm.mjs";
 import { runDramaPipeline } from "../lib/drama/pipeline.mjs";
 import { generateShotFrame, handleDramaApi } from "../lib/drama/routes.mjs";
 import { getComfyuiConfig } from "../lib/drama/comfyui.mjs";
+import { createMaterialStore } from "../lib/drama/materials.mjs";
 import { estimateBudget, getDramaPricing } from "../lib/drama/budget.mjs";
+
+const PNG_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
 async function fixtureProject(root) {
   const store = createDramaStore(root);
@@ -169,4 +172,46 @@ test("PATCH 编辑 audioMode/continuity 持久化且不影响首帧与预算", a
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("M8：首帧注入参考图→controlnet.used=true；素材缺失降级 used=false", async () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), "drama-m8f-"));
+  const store = createDramaStore(dataRoot);
+  const project = store.save(createDramaProject({ title: "t", script: DEMO_DRAMA_SCRIPT }));
+  store.update(project.id, (p) => {
+    p.analysis = normalizeAnalysis({ synopsis: "s", genre: "g", characters: [{ id: "char-1", name: "n", appearance: "a" }], scenes: [{ id: "scene-1", name: "便利店", appearance: "store" }], props: [] });
+    if (!p.shots.length) p.shots = [normalizeShot({ id: "shot-1", sceneName: "便利店", shotType: "cinematic", fluxPrompt: "cinematic film still, a store at night, neon signs, cinematic", durationSec: 3 }, 0)];
+    p.gateAConfirmedAt = new Date().toISOString();
+  });
+  const materialStore = createMaterialStore(dataRoot);
+  const img = materialStore.register({ name: "参考", dataUrl: PNG_DATA_URL });
+  store.update(project.id, (p) => { p.analysis.scenes[0].refMaterialId = img.id; });
+  const cn = { name: "flux-controlnet-depth.safetensors", preprocessor: "depth", strength: 0.8 };
+  const ctx = {
+    sendJson: (r, s, b) => r.sendJson(s, b), envelope: (ok, d, o = {}) => ({ ok, ...(ok ? { data: d } : { errorCode: o.errorCode, message: o.message }) }), readJson: async (r) => JSON.parse(r.body || "{}"), allowRequest: () => true,
+    store, materialStore, controlnetConfig: cn,
+    comfyConfig: { baseUrl: "http://127.0.0.1:9", steps: 4, timeoutMs: 3000, pollIntervalMs: 10 },
+    frameFetch: async (url, opts) => {
+      if (url.endsWith("/upload/image")) return { ok: true, json: async () => ({ name: "ref-uploaded.png" }), arrayBuffer: async () => Buffer.alloc(0) };
+      if (url.includes("/prompt")) return { ok: true, json: async () => ({ prompt_id: "p1" }) };
+      if (url.includes("/history/")) return { ok: true, json: async () => ({ p1: { outputs: { "13": { images: [{ filename: "out.png", subfolder: "", type: "output" }] } } } }) };
+      if (url.includes("/view")) return { ok: true, arrayBuffer: async () => Buffer.from([0x89, 0x50, 0x4e, 0x47]) };
+      return { ok: false };
+    },
+    frameSleep: async () => {},
+    findAvatar: () => null, findVoice: () => null, pricing: {},
+    seedanceStatus: () => ({ connected: false }), seedanceConfig: {}, audioDeps: {}
+  };
+  await generateShotFrame(ctx, project.id, project.shots[0].id);
+  const shot = store.get(project.id).shots[0];
+  assert.equal(shot.frame.status, "ready");
+  assert.equal(shot.frame.controlnet.used, true);
+  assert.equal(shot.frame.controlnet.source, "ref");
+  // 素材删除后重抽 → 降级
+  materialStore.remove(img.id);
+  await generateShotFrame(ctx, project.id, project.shots[0].id, 999);
+  const shot2 = store.get(project.id).shots[0];
+  assert.equal(shot2.frame.controlnet.used, false);
+  assert.equal(shot2.frame.controlnet.source, "fallback");
+  rmSync(dataRoot, { recursive: true, force: true });
 });
