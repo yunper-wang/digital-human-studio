@@ -50,3 +50,52 @@ test("synthesizeShotVoice 缺配置时报对应错误", async () => {
     /ElevenLabs|ELEVENLABS/
   );
 });
+
+test("M8：ElevenLabs 分支有 voiceCloneRef → similarity_boost 提升；voiceRefUsed=true", async () => {
+  let capturedBody = null;
+  const fetchImpl = async (url, opts) => {
+    capturedBody = JSON.parse(opts.body);
+    return { ok: true, arrayBuffer: async () => Buffer.alloc(800) };
+  };
+  const result = await synthesizeShotVoice({
+    voiceTarget: { kind: "elevenlabs", voiceId: "v1" },
+    text: "你好", language: "zh",
+    deps: { elevenKey: "sk-x", fetchImpl },
+    voiceCloneRef: { bytes: Buffer.alloc(100), materialId: "mat-1" }
+  });
+  assert.equal(result.provider, "elevenlabs");
+  assert.equal(result.voiceRefUsed, true);
+  assert.ok(capturedBody.voice_settings.similarity_boost >= 0.9);
+});
+
+test("M8：无 voiceCloneRef → 常规 similarity_boost=0.78；voiceRefUsed=false", async () => {
+  let capturedBody = null;
+  const fetchImpl = async (url, opts) => {
+    capturedBody = JSON.parse(opts.body);
+    return { ok: true, arrayBuffer: async () => Buffer.alloc(800) };
+  };
+  const result = await synthesizeShotVoice({
+    voiceTarget: { kind: "elevenlabs", voiceId: "v1" },
+    text: "你好", language: "zh",
+    deps: { elevenKey: "sk-x", fetchImpl }
+  });
+  assert.equal(result.voiceRefUsed, false);
+  assert.equal(capturedBody.voice_settings.similarity_boost, 0.78);
+});
+
+test("M8：Voicebox 分支忽略 voiceCloneRef；voiceRefUsed=false", async () => {
+  const fetchImpl = async (url) => {
+    if (url.endsWith("/generate")) return { ok: true, json: async () => ({ id: "job1" }) };
+    if (url.includes("/history/")) return { ok: true, json: async () => ({ status: "completed" }) };
+    if (url.includes("/audio/")) return { ok: true, arrayBuffer: async () => Buffer.alloc(800) };
+    return { ok: false };
+  };
+  const result = await synthesizeShotVoice({
+    voiceTarget: { kind: "voicebox", profileId: "p1" },
+    text: "你好", language: "zh",
+    deps: { voiceboxUrl: "http://127.0.0.1:5005", fetchImpl, sleep: async () => {} },
+    voiceCloneRef: { bytes: Buffer.alloc(100), materialId: "mat-1" }
+  });
+  assert.equal(result.provider, "voicebox");
+  assert.equal(result.voiceRefUsed, false);
+});
