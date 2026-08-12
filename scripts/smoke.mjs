@@ -206,6 +206,15 @@ try {
   const m8Audio = await request("/api/drama/materials", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "M8参考音", dataUrl: `data:audio/mpeg;base64,${Buffer.from([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]).toString("base64")}` }) });
   if (m8Audio.material?.kind !== "audio") throw new Error("M8 参考音频登记失败");
 
+  // ---------- M9：项目级后端覆盖守卫 ----------
+  const m9Before = await request(`/api/drama/projects/${created.project.id}/provider-overrides`);
+  if (m9Before.overrides.llm !== null || m9Before.overrides.voice !== null) throw new Error("M9 初始 override 应为 null");
+  const m9Patched = await request(`/api/drama/projects/${created.project.id}/provider-overrides`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ llm: { baseUrl: "https://api.example.com/v1", model: "gpt-4o", apiKey: "sk-M9-SECRET" } }) });
+  if (!m9Patched.overrides.llm?.configured) throw new Error("M9 override 写入失败");
+  const m9After = await request(`/api/drama/projects/${created.project.id}/provider-overrides`);
+  if (JSON.stringify(m9After).includes("sk-M9-SECRET") || JSON.stringify(m9After).includes("apiKey")) throw new Error("M9 override 泄露密钥");
+  await request(`/api/drama/projects/${created.project.id}/provider-overrides`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clear: ["llm"] }) });
+
   console.log(JSON.stringify({
     ok: true,
     service: health.service,
@@ -225,7 +234,8 @@ try {
     materialGuard: matRes.material.id,
     providersGuard: provRes.providers.length,
     m8MaterialGuard: m8Img.material.id,
-    m8AudioGuard: m8Audio.material.id
+    m8AudioGuard: m8Audio.material.id,
+    m9OverrideGuard: m9Patched.overrides.llm.configured
   }, null, 2));
 } finally {
   child.kill("SIGTERM");
