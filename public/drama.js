@@ -999,7 +999,7 @@ function renderCompose(project) {
   else status.textContent = notReady.length ? `还有 ${notReady.length} 个分镜视频未确认` : "就绪，可合成";
 
   const preview = $("#composePreview");
-  const mp4 = $("#exportMp4"); const srt = $("#exportSrt");
+  const mp4 = $("#exportMp4"); const srt = $("#exportSrt"); const zip = $("#exportZip");
   if (preview) preview.innerHTML = "";
   if (compose.status === "succeeded" && compose.file) {
     const v = document.createElement("video");
@@ -1011,9 +1011,11 @@ function renderCompose(project) {
       if (compose.srtFile) { srt.href = `/drama-files/${project.id}/compose/${compose.srtFile}`; srt.classList.remove("hidden"); }
       else srt.classList.add("hidden");
     }
+    if (zip) { zip.href = `/api/drama/projects/${project.id}/export/zip`; zip.classList.remove("hidden"); }
   } else {
     if (mp4) mp4.classList.add("hidden");
     if (srt) srt.classList.add("hidden");
+    if (zip) zip.classList.add("hidden");
   }
 }
 
